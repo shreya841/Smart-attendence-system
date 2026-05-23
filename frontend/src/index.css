@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-cyber-bg text-slate-200 overflow-x-hidden;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+/* Glassmorphism Reusable Classes */
+.glass-panel {
+  @apply bg-slate-950/40 backdrop-blur-lg border border-white/10 shadow-lg;
+}
+
+.glass-panel-heavy {
+  @apply bg-slate-950/70 backdrop-blur-2xl border border-white/15 shadow-xl;
+}
+
+.glass-card {
+  @apply bg-slate-900/40 backdrop-blur-md border border-white/5 rounded-2xl hover:border-white/10 transition-all duration-300;
+}
+
+.glass-input {
+  @apply bg-slate-950/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan transition-all duration-200 backdrop-blur-md;
+}
+
+/* Futuristic Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(11, 15, 25, 0.5);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.4);
+}
+
+/* Glow effects */
+.glow-cyan {
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.6);
+}
+
+.glow-blue {
+  text-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+}
+
+.glow-green {
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.6);
+}
+
+/* Leaflet map styling reset */
+.leaflet-container {
+  background: #0b0f19 !important;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: none !important;
+}
+
+.leaflet-bar a {
+  background-color: rgba(17, 24, 39, 0.8) !important;
+  color: #fff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: rgba(6, 182, 212, 0.2) !important;
+}
+
+/* Range input slider – custom gold cyberpunk styling */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+  border: none;
+  background: transparent;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #F59E0B;
+  border: 2px solid rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+input[type='range']::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.8);
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #F59E0B;
+  border: 2px solid rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  cursor: pointer;
+}
+
+/* Leaflet popup custom dark theme */
+.leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(6, 182, 212, 0.2) !important;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1) !important;
+  border-radius: 12px !important;
+  color: #e2e8f0 !important;
+  backdrop-filter: blur(12px);
+}
+
+.leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.95) !important;
+}
+
+.leaflet-popup-close-button {
+  color: #64748b !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: #06B6D4 !important;
+}
+
+/* Cyber Scanline animation keyframes */
+@keyframes scanline {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+.animate-scan-line {
+  animation: scanline 4.5s linear infinite;
+}
