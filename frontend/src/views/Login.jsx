@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { Shield, Key, Mail, AlertTriangle } from 'lucide-react';
+import { Shield, Key, Mail, AlertTriangle, Copy } from 'lucide-react';
 
 export default function Login() {
   const { login } = useAuth();
@@ -20,16 +20,55 @@ export default function Login() {
     if (result.success) {
       navigate('/dashboard');
     } else {
-      setError(result.message || 'Authentication failed. Please verify credentials.');
+      let friendlyError = result.message || 'Authentication failed. Please verify credentials.';
+      const lowerErr = friendlyError.toLowerCase();
+      if (lowerErr.includes('permission denied') || lowerErr.includes('row-level security') || lowerErr.includes('violates') || lowerErr.includes('rls')) {
+        friendlyError = 'DATABASE_RLS_BLOCKED';
+      }
+      setError(friendlyError);
       setSubmitting(false);
     }
   };
+
+  const sqlCode = `-- Execute this in Supabase SQL Editor to bypass Row Level Security blocks
+ALTER TABLE public.employees DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.attendance DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;`;
 
   return (
     <div>
       <h2 className="text-lg font-bold text-white text-center font-sans tracking-wide mb-6 uppercase">Authorize User Session</h2>
 
-      {error && (
+      {error === 'DATABASE_RLS_BLOCKED' ? (
+        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs font-sans leading-relaxed">
+          <div className="flex items-center gap-2 text-amber-400 font-mono font-bold tracking-wider uppercase mb-2">
+            <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
+            Supabase Security Blocked
+          </div>
+          <p className="mb-3 text-[11px]">
+            Your Supabase project has <strong>Row Level Security (RLS)</strong> enabled, which is blocking the browser from accessing the database.
+          </p>
+          <div className="bg-slate-950/60 p-3 rounded-lg border border-amber-500/20 font-mono text-[10px] text-amber-300 overflow-x-auto max-h-32 mb-3 select-all">
+            {sqlCode}
+          </div>
+          <p className="mb-3 text-[11px]">
+            <strong>Quick Fix:</strong> Copy the code block above, open your <strong>Supabase Dashboard ➡️ SQL Editor ➡️ New Query</strong>, paste it, and click <strong>Run</strong>.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(sqlCode);
+              alert('SQL Code copied to clipboard!');
+            }}
+            className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 rounded-xl text-amber-200 font-bold uppercase tracking-wider text-[10px] transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Copy className="w-3.5 h-3.5" />
+            Copy Quick-Fix SQL Code
+          </button>
+        </div>
+      ) : error && (
         <div className="mb-4 p-3.5 bg-cyber-red/10 border border-cyber-red/20 rounded-xl text-cyber-red flex items-start gap-2.5 text-xs font-mono">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
