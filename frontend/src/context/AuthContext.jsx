@@ -33,7 +33,6 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(true);
           } else {
             console.warn('[AUTH STATE]: Logged-in user not found in employees table. Performing sign out.');
-            // Only signOut if we are in signed-in state to prevent loop
             const curSession = await supabase.auth.getSession();
             if (curSession?.data?.session) {
               await supabase.auth.signOut();
@@ -72,8 +71,111 @@ export const AuthProvider = ({ children }) => {
   const handleLogin = async (email, password) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      let { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
+      // Self-Healing Bootstrapper / Seed Generator
+      if (error && (error.message.includes('Invalid login credentials') || error.message.includes('should be at least'))) {
+        // 1. If it's the default admin and the database table is completely empty, trigger auto-seeding
+        if (email === 'admin@company.com' && password === 'adminpassword') {
+          const { data: listEmps } = await supabase.from('employees').select('id').limit(1);
+          if (!listEmps || listEmps.length === 0) {
+            console.log('[BOOTSTRAP SEEDING]: employees table is empty. Auto-seeding settings, admin, and employee...');
+            
+            // Seed settings
+            await supabase.from('settings').upsert([
+              { key: 'geofence_lat', value: '28.6139' },
+              { key: 'geofence_lng', value: '77.2090' },
+              { key: 'geofence_radius', value: '100' }
+            ]);
+
+            // SignUp Admin
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+              email: 'admin@company.com',
+              password: 'adminpassword',
+              options: {
+                data: { name: 'Administrator', role: 'admin', department: 'Security & HR' }
+              }
+            });
+
+            if (!signUpErr) {
+              const desc = [];
+              const lower = 'administrator';
+              for (let i = 0; i < 128; i++) {
+                let charVal = lower.charCodeAt(i % lower.length) / 128.0;
+                desc.push(Math.sin(i * charVal) * 0.8 + 0.1);
+              }
+              const { encryptDescriptor } = await import('../services/api.js');
+              const adminFace = await encryptDescriptor(desc);
+
+              await supabase.from('employees').insert({
+                id: 'EMP-001',
+                name: 'Administrator',
+                email: 'admin@company.com',
+                password: 'adminpassword',
+                role: 'admin',
+                department: 'Security & HR',
+                face_data: adminFace,
+                status: 'Offline'
+              });
+
+              // Seed default Employee
+              const empDesc = [];
+              const empLower = 'standard employee';
+              for (let i = 0; i < 128; i++) {
+                let charVal = empLower.charCodeAt(i % empLower.length) / 128.0;
+                empDesc.push(Math.sin(i * charVal) * 0.8 + 0.1);
+              }
+              const empFace = await encryptDescriptor(empDesc);
+
+              await supabase.from('employees').insert({
+                id: 'EMP-002',
+                name: 'Standard Employee',
+                email: 'employee@company.com',
+                password: 'employeepassword',
+                role: 'employee',
+                department: 'Engineering',
+                face_data: empFace,
+                status: 'Offline'
+              });
+
+              if (signUpData?.session) {
+                data = signUpData;
+                error = null;
+              }
+            }
+          }
+        }
+
+        // 2. If they exist in public.employees but not in Supabase Auth, silently register them
+        if (error) {
+          const { data: employee } = await supabase
+            .from('employees')
+            .select('*')
+            .eq('email', email)
+            .maybeSingle();
+
+          if (employee) {
+            console.log('[LAZY AUTH SEED]: Silently registering existing employee in Supabase Auth...', email);
+            const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+              email,
+              password,
+              options: {
+                data: {
+                  name: employee.name,
+                  role: employee.role,
+                  department: employee.department
+                }
+              }
+            });
+
+            if (!signUpErr && signUpData?.session) {
+              data = signUpData;
+              error = null;
+            }
+          }
+        }
+      }
+
       if (error) {
         return { success: false, message: error.message };
       }
@@ -107,7 +209,6 @@ export const AuthProvider = ({ children }) => {
   };
 
   const handleRegister = async (profileData) => {
-    // Standard employee registration is handled client-side inside api.js when POST /employees is called.
     const { apiCall } = await import('../services/api.js');
     try {
       const data = await apiCall('/employees', 'POST', profileData, token);
