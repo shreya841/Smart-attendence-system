@@ -1006,7 +1006,7 @@ export default function AdminPanel() {
       });
       if (res.success) {
         playBiometricSound('success');
-        speakText('Enrolled successfully');
+        speakText(`Face registered successfully for ${name}`);
         setEnrollSuccess(`Enterprise biometric face signature successfully enrolled & encrypted for ${name}!`);
         setEnrollStatus('SUCCESS');
         setConfidenceScore(confidence);
@@ -1058,7 +1058,7 @@ export default function AdminPanel() {
       });
       if (res.success) {
         playBiometricSound('success');
-        speakText('Enrolled successfully');
+        speakText(`Face registered successfully for ${name}`);
         setEnrollSuccess(`Synthetic biometric key registered successfully for ${name}!`);
         setEnrollStatus('SUCCESS');
         setConfidenceScore(99.9);

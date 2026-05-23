@@ -30,7 +30,12 @@ export const AuthProvider = ({ children }) => {
         // If Supabase logs out, we check if there's a legacy token still
         const legacyToken = localStorage.getItem('quantum_legacy_token');
         if (!legacyToken) {
-          handleLogout();
+          // Do local cleanup only to prevent infinite loop with supabase.auth.signOut
+          localStorage.removeItem('quantum_token');
+          localStorage.removeItem('quantum_user');
+          setToken(null);
+          setUser(null);
+          setIsAuthenticated(false);
         }
       }
     });
@@ -67,7 +72,10 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error('[AUTH ERROR]: Token verification failed', err);
-      handleLogout();
+      // Only logout on explicit API rejection, not on backend network crash
+      if (!err.message || (!err.message.includes('Failed to fetch') && !err.message.includes('Network'))) {
+        handleLogout();
+      }
     } finally {
       setLoading(false);
     }

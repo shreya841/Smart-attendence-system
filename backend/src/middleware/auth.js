@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { supabase, checkSupabaseConnection } from '../database/supabaseClient.js';
+import { getDb } from '../database/db.js';
 
 export const requireAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -35,6 +36,14 @@ export const requireAuth = async (req, res, next) => {
         if (emp) {
           req.user = emp;
           return next();
+        } else {
+          // Fallback to SQLite if missing in public.employees (due to lazy migration only creating Auth identity)
+          const db = getDb();
+          const localUser = await db.get(`SELECT * FROM employees WHERE email = ?`, [data.user.email]);
+          if (localUser) {
+            req.user = localUser;
+            return next();
+          }
         }
       }
     }
