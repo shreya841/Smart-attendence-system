@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext.jsx';
+import { useAuth, supabase } from '../context/AuthContext.jsx';
 import { Shield, Key, Mail, AlertTriangle, Copy } from 'lucide-react';
 
 export default function Login() {
@@ -10,6 +10,30 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Automatic Database Connectivity Diagnostic on Mount
+  useEffect(() => {
+    const runRLSDiagnostic = async () => {
+      try {
+        const { error } = await supabase.from('settings').select('key').limit(1);
+        if (error) {
+          const lowerMsg = error.message.toLowerCase();
+          if (
+            lowerMsg.includes('permission denied') || 
+            lowerMsg.includes('row-level security') || 
+            lowerMsg.includes('violates') || 
+            lowerMsg.includes('rls')
+          ) {
+            console.warn('[RLS DIAGNOSTIC]: Row-Level Security policy block detected on mount.');
+            setError('DATABASE_RLS_BLOCKED');
+          }
+        }
+      } catch (err) {
+        console.error('[RLS CONNECTIVITY DIAGNOSTIC EXCEPTION]:', err);
+      }
+    };
+    runRLSDiagnostic();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,7 +46,12 @@ export default function Login() {
     } else {
       let friendlyError = result.message || 'Authentication failed. Please verify credentials.';
       const lowerErr = friendlyError.toLowerCase();
-      if (lowerErr.includes('permission denied') || lowerErr.includes('row-level security') || lowerErr.includes('violates') || lowerErr.includes('rls')) {
+      if (
+        lowerErr.includes('permission denied') || 
+        lowerErr.includes('row-level security') || 
+        lowerErr.includes('violates') || 
+        lowerErr.includes('rls')
+      ) {
         friendlyError = 'DATABASE_RLS_BLOCKED';
       }
       setError(friendlyError);
