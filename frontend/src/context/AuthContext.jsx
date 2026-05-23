@@ -1,5 +1,4 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { apiCall } from '../services/api.js';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
@@ -15,110 +14,103 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Listen for Supabase Auth state changes natively
+    // Listen for Supabase Auth state changes natively
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[AUTH STATE CHANGE EVENT]:', event);
       if (session) {
         setToken(session.access_token);
         localStorage.setItem('quantum_token', session.access_token);
         
-        // Supabase Auth doesn't have the full employee profile directly on session.user, 
-        // we can fetch it via /auth/me or query the employees table
-        if (!user) {
-          verifyBackendToken(session.access_token);
-        }
-      } else {
-        // If Supabase logs out, we check if there's a legacy token still
-        const legacyToken = localStorage.getItem('quantum_legacy_token');
-        if (!legacyToken) {
-          // Do local cleanup only to prevent infinite loop with supabase.auth.signOut
+        try {
+          const { data: employee, error } = await supabase
+            .from('employees')
+            .select('id, name, email, role, department, avatar')
+            .eq('email', session.user.email)
+            .single();
+
+          if (employee && !error) {
+            setUser(employee);
+            setIsAuthenticated(true);
+          } else {
+            console.warn('[AUTH STATE]: Logged-in user not found in employees table. Performing sign out.');
+            // Only signOut if we are in signed-in state to prevent loop
+            const curSession = await supabase.auth.getSession();
+            if (curSession?.data?.session) {
+              await supabase.auth.signOut();
+            }
+            localStorage.removeItem('quantum_token');
+            localStorage.removeItem('quantum_user');
+            setToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } catch (err) {
+          console.error('[AUTH STATE FETCH ERROR]:', err);
           localStorage.removeItem('quantum_token');
           localStorage.removeItem('quantum_user');
           setToken(null);
           setUser(null);
           setIsAuthenticated(false);
-        }
-      }
-    });
-
-    const initAuth = async () => {
-      if (token) {
-        if (user) {
-          setIsAuthenticated(true);
+        } finally {
           setLoading(false);
-          return;
         }
-        await verifyBackendToken(token);
       } else {
+        localStorage.removeItem('quantum_token');
+        localStorage.removeItem('quantum_user');
+        setToken(null);
+        setUser(null);
         setIsAuthenticated(false);
         setLoading(false);
       }
-    };
-
-    initAuth();
+    });
 
     return () => {
       subscription?.unsubscribe();
     };
-  }, [token]);
-
-  const verifyBackendToken = async (authToken) => {
-    try {
-      const response = await apiCall('/auth/me', 'GET', null, authToken);
-      if (response.success && response.user) {
-        setUser(response.user);
-        setIsAuthenticated(true);
-      } else {
-        handleLogout();
-      }
-    } catch (err) {
-      console.error('[AUTH ERROR]: Token verification failed', err);
-      // Only logout on explicit API rejection, not on backend network crash
-      if (!err.message || (!err.message.includes('Failed to fetch') && !err.message.includes('Network'))) {
-        handleLogout();
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, []);
 
   const handleLogin = async (email, password) => {
     setLoading(true);
     try {
-      // Lazy Migration: Backend handles both Supabase and SQLite logic now!
-      const data = await apiCall('/auth/login', 'POST', { email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
-      if (data.success) {
-        localStorage.setItem('quantum_token', data.token);
-        if (data.legacyToken) localStorage.setItem('quantum_legacy_token', data.legacyToken);
-        localStorage.setItem('quantum_user', JSON.stringify(data.user));
-        
-        setToken(data.token);
-        setUser(data.user);
-        setIsAuthenticated(true);
-
-        // If backend returned a Supabase session, Supabase Auth state will automatically sync it
-        if (data.session) {
-          await supabase.auth.setSession({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token
-          });
-        }
-        
-        return { success: true };
-      } else {
-        return { success: false, message: data.message };
+      if (error) {
+        return { success: false, message: error.message };
       }
+
+      // Fetch profile details
+      const { data: employee, error: dbError } = await supabase
+        .from('employees')
+        .select('id, name, email, role, department, avatar')
+        .eq('email', email)
+        .single();
+
+      if (dbError || !employee) {
+        await supabase.auth.signOut();
+        return { success: false, message: 'Employee profile not found in database.' };
+      }
+
+      localStorage.setItem('quantum_token', data.session.access_token);
+      localStorage.setItem('quantum_user', JSON.stringify(employee));
+      
+      setToken(data.session.access_token);
+      setUser(employee);
+      setIsAuthenticated(true);
+      
+      return { success: true };
     } catch (error) {
       console.error('[LOGIN ERROR]:', error);
-      return { success: false, message: error.message || 'Network error occurred' };
+      return { success: false, message: error.message || 'Login failed due to a network error' };
     } finally {
       setLoading(false);
     }
   };
 
   const handleRegister = async (profileData) => {
+    // Standard employee registration is handled client-side inside api.js when POST /employees is called.
+    const { apiCall } = await import('../services/api.js');
     try {
-      const data = await apiCall('/auth/register', 'POST', profileData, token);
+      const data = await apiCall('/employees', 'POST', profileData, token);
       return data;
     } catch (error) {
       console.error('[REGISTRATION ERROR]:', error);
@@ -128,13 +120,12 @@ export const AuthProvider = ({ children }) => {
 
   const handleLogout = async () => {
     localStorage.removeItem('quantum_token');
-    localStorage.removeItem('quantum_legacy_token');
     localStorage.removeItem('quantum_user');
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
     
-    // Also sign out of Supabase
+    // Sign out of Supabase
     await supabase.auth.signOut();
   };
 
