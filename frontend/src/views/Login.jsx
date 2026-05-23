@@ -27,7 +27,8 @@ export default function Login() {
             lowerMsg.includes('permission denied') || 
             lowerMsg.includes('row-level security') || 
             lowerMsg.includes('violates') || 
-            lowerMsg.includes('rls')
+            lowerMsg.includes('rls') ||
+            error.code === '42501'
           ) {
             setDbDiagnostic({ type: 'RLS', message: error.message });
           } else {
@@ -124,14 +125,29 @@ ALTER TABLE public.employees DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;`;
+ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;
 
-  const rlsSql = `-- Execute this in Supabase SQL Editor to bypass Row Level Security blocks
+-- 4. GRANT EXPLICIT POSTGRESQL PRIVILEGES TO ALL CLIENT ROLES
+GRANT ALL PRIVILEGES ON TABLE public.employees TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.attendance TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.logs TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.settings TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.office_geofence TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;`;
+
+  const rlsSql = `-- Execute this in Supabase SQL Editor to grant explicit privileges and disable RLS
 ALTER TABLE public.employees DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.attendance DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;`;
+ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;
+
+GRANT ALL PRIVILEGES ON TABLE public.employees TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.attendance TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.logs TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.settings TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON TABLE public.office_geofence TO anon, authenticated, service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;`;
 
   const handleCopy = (code) => {
     navigator.clipboard.writeText(code);
@@ -176,10 +192,10 @@ ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;`;
             <>
               <div className="flex items-center gap-2 text-amber-400 font-mono font-bold tracking-wider uppercase mb-2">
                 <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
-                Row-Level Security Active
+                Row-Level Security / Privileges Denied
               </div>
               <p className="mb-3 text-[11px]">
-                Your Supabase tables exist, but Row Level Security (RLS) is blocking the browser client from reading settings.
+                Your Supabase tables exist, but Row Level Security (RLS) or missing PostgreSQL table grants are blocking the browser client from reading settings.
               </p>
               <div className="bg-slate-950/60 p-3 rounded-lg border border-amber-500/20 font-mono text-[9px] text-amber-300 overflow-x-auto max-h-32 mb-3 select-all">
                 {rlsSql}
@@ -193,7 +209,7 @@ ALTER TABLE public.office_geofence DISABLE ROW LEVEL SECURITY;`;
                 className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 rounded-xl text-amber-200 font-bold uppercase tracking-wider text-[10px] transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? 'Copied successfully!' : 'Copy RLS Bypass SQL'}
+                {copied ? 'Copied successfully!' : 'Copy Privilege Bypass SQL'}
               </button>
             </>
           )}
