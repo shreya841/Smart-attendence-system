@@ -14,7 +14,7 @@ export default function AuthLayout() {
   // This prevents the spinner from showing for new visitors (no token at all)
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0B0F19]">
+      <div className="min-h-screen flex items-center justify-center bg-transparent">
         <div className="relative flex flex-col items-center">
           <div className="w-16 h-16 border-4 border-cyber-cyan border-t-transparent rounded-full animate-spin shadow-cyan-glow"></div>
           <p className="mt-4 text-xs font-mono tracking-widest text-cyber-cyan animate-pulse">SYNCHRONIZING SECURITY ENCLAVE...</p>
@@ -25,10 +25,10 @@ export default function AuthLayout() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-[#0b0f19] cyber-grid">
+    <div className="min-h-screen flex items-center justify-center px-4 relative overflow-hidden bg-transparent cyber-grid">
       {/* Background Cyber Ambient Lights */}
-      <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-cyber-cyan/5 rounded-full filter blur-[100px] animate-pulse-slow pointer-events-none"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-cyber-blue/5 rounded-full filter blur-[120px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-tr from-cyber-cyan/15 via-pink-500/10 to-transparent rounded-full filter blur-[100px] animate-pulse-slow pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-cyber-blue/15 via-purple-600/10 to-transparent rounded-full filter blur-[120px] animate-pulse-slow pointer-events-none"></div>
 
       <div className="w-full max-w-md relative z-10">
         {/* Brand Logo Header */}

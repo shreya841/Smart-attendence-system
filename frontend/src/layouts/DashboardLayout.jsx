@@ -108,9 +108,10 @@ function DashboardLayoutInner() {
 
   return (
     <div className="min-h-screen flex bg-transparent relative overflow-hidden">
-      {/* Background Ambient Glows */}
-      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-cyber-cyan/5 to-transparent rounded-full filter blur-[150px] pointer-events-none"></div>
-      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-cyber-blue/5 to-transparent rounded-full filter blur-[150px] pointer-events-none"></div>
+      {/* Background Vibrant Cosmic Ambient Glows */}
+      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-gradient-to-tr from-cyber-cyan/15 via-purple-500/10 to-transparent rounded-full filter blur-[130px] pointer-events-none animate-pulse-slow"></div>
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/15 via-cyber-blue/10 to-transparent rounded-full filter blur-[130px] pointer-events-none"></div>
+      <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-gradient-to-tr from-purple-600/10 to-transparent rounded-full filter blur-[110px] pointer-events-none"></div>
 
       {/* Sidebar - Desktop (Collapsible via Framer Motion) */}
       <motion.aside 

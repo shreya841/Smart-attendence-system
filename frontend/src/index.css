@@ -4,37 +4,40 @@
 
 /* CSS Theme Variables Design System */
 :root {
-  --bg-primary: #030712;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --bg-gradient: radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.04) 0px, transparent 50%),
-                 radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
-                 radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.03) 0px, transparent 65%);
-  --glass-bg: rgba(9, 13, 26, 0.45);
-  --glass-bg-heavy: rgba(7, 10, 21, 0.75);
-  --glass-card: rgba(17, 24, 39, 0.3);
-  --glass-card-hover: rgba(17, 24, 39, 0.45);
-  --glass-border: rgba(255, 255, 255, 0.04);
-  --glass-border-heavy: rgba(255, 255, 255, 0.06);
-  --glass-border-hover: rgba(6, 182, 212, 0.18);
-  --glass-input-bg: rgba(2, 6, 23, 0.45);
-  --glass-input-border: rgba(255, 255, 255, 0.05);
-  --glass-input-text: #ffffff;
-  --btn-secondary-bg: rgba(15, 23, 42, 0.6);
-  --btn-secondary-border: rgba(255, 255, 255, 0.05);
-  --btn-secondary-text: #94a3b8;
+  --bg-primary: #0b0c22; 
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   
-  --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
-  --panel-shadow-heavy: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+  --bg-gradient: radial-gradient(at 0% 0%, rgba(236, 72, 153, 0.15) 0px, transparent 55%),
+                 radial-gradient(at 100% 0%, rgba(6, 182, 212, 0.18) 0px, transparent 55%),
+                 radial-gradient(at 50% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 65%);
+                 
+  --glass-bg: rgba(16, 12, 42, 0.65);
+  --glass-bg-heavy: rgba(12, 8, 30, 0.88);
+  --glass-card: rgba(22, 16, 52, 0.45);
+  --glass-card-hover: rgba(32, 24, 76, 0.65);
+  --glass-border: rgba(139, 92, 246, 0.22);
+  --glass-border-heavy: rgba(236, 72, 153, 0.25);
+  --glass-border-hover: rgba(6, 182, 212, 0.45);
+  --glass-input-bg: rgba(6, 3, 26, 0.75);
+  --glass-input-border: rgba(139, 92, 246, 0.3);
+  --glass-input-text: #ffffff;
+  
+  --btn-secondary-bg: rgba(32, 24, 76, 0.55);
+  --btn-secondary-border: rgba(139, 92, 246, 0.3);
+  --btn-secondary-text: #e2e8f0;
+  
+  --panel-shadow: 0 8px 32px 0 rgba(139, 92, 246, 0.22);
+  --panel-shadow-heavy: 0 12px 40px 0 rgba(236, 72, 153, 0.25);
   
   --logo-text: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.05);
-  --sidebar-footer-bg: rgba(2, 6, 23, 0.2);
-  --header-bg: rgba(9, 13, 22, 0.3);
-  --cyber-grid-color: rgba(6, 182, 212, 0.025);
-  --map-bg: #070a13;
-  --leaflet-popup-bg: rgba(9, 13, 26, 0.95);
+  --sidebar-border: rgba(139, 92, 246, 0.22);
+  --sidebar-footer-bg: rgba(8, 4, 28, 0.5);
+  --header-bg: rgba(12, 8, 30, 0.55);
+  --cyber-grid-color: rgba(236, 72, 153, 0.05);
+  --map-bg: #0b071a;
+  --leaflet-popup-bg: rgba(12, 8, 32, 0.96);
   --leaflet-popup-text: #cbd5e1;
   --text-white-force: #ffffff;
 }
