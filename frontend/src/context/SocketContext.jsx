@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase } from './AuthContext.jsx';
+import { supabase } from '../services/supabaseClient.js';
 
 const SocketContext = createContext(null);
 

@@ -3,7 +3,7 @@ import * as faceapi from '@vladmandic/face-api';
 let modelsLoaded = false;
 let loadingPromise = null;
 
-const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+const MODEL_URL = './model/';
 
 /**
  * Trigger loading of face-api.js neural networks.
@@ -41,10 +41,11 @@ export const detectFaceBiometrics = async (videoElement) => {
     await loadFaceApiModels();
   }
 
-  // Use TinyFaceDetector with solid input options for fluid UI frame rates
+  // inputSize 224 gives better landmark accuracy for blink detection (EAR)
+  // scoreThreshold 0.4 allows faster detection at slight distance/angle
   const options = new faceapi.TinyFaceDetectorOptions({
-    inputSize: 160,
-    scoreThreshold: 0.5
+    inputSize: 224,
+    scoreThreshold: 0.4
   });
 
   const detection = await faceapi

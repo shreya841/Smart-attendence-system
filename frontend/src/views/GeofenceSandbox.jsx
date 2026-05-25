@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
 import { apiCall } from '../services/api.js';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
@@ -9,8 +10,16 @@ import { MapPin, Navigation, Compass, AlertTriangle, CheckCircle, HelpCircle } f
 function ChangeMapView({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) {
-      map.setView(center, map.getZoom());
+    if (!map) return;
+    try {
+      const container = map.getContainer();
+      if (!container) return;
+      
+      if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) {
+        map.setView(center, map.getZoom());
+      }
+    } catch (e) {
+      console.warn('[ChangeMapView Cleanup Guard]: Map is unmounted.', e);
     }
   }, [center, map]);
   return null;
@@ -52,18 +61,34 @@ export default function GeofenceSandbox() {
   });
   const [updating, setUpdating] = useState(false);
   const markerRef = useRef(null);
+  const isComponentMounted = useRef(true);
+  const mapRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        try {
+          console.log('[GeofenceSandbox Cleanup]: Explicitly removing Leaflet map instance...');
+          mapRef.current.remove();
+          mapRef.current = null;
+        } catch (e) {
+          console.warn('[GeofenceSandbox Cleanup Warning]:', e);
+        }
+      }
+    };
+  }, []);
 
   // Syncs and updates coordinate updates with backend REST services
   const syncCoordinates = async (lat, lng) => {
     if (!user) return;
-    setUpdating(true);
+    if (isComponentMounted.current) setUpdating(true);
     try {
       const response = await apiCall(`/employees/${user?.id}/coordinates`, 'POST', {
         latitude: lat,
         longitude: lng
       });
 
-      if (response.success) {
+      if (response.success && isComponentMounted.current) {
         setTelemetry({
           distance: response.data.distance,
           status: response.data.status,
@@ -73,36 +98,50 @@ export default function GeofenceSandbox() {
     } catch (err) {
       console.error('[GEOFENCE SYNC ERROR]: Failed updating GPS metrics:', err);
     } finally {
-      setUpdating(false);
+      if (isComponentMounted.current) setUpdating(false);
     }
   };
 
   // Run initial sync and load settings from database
   useEffect(() => {
+    isComponentMounted.current = true;
     if (!user) return;
+    const controller = new AbortController();
     const initSandbox = async () => {
       try {
         const response = await apiCall('/settings', 'GET');
+        // Guard: abort if user navigated away
+        if (controller.signal.aborted || !isComponentMounted.current) return;
+        // CRITICAL FIX: Always use Number() to force numeric coercion.
+        // Supabase returns settings as strings — string + 0.0003 = concatenation!
         let lat = 28.6139;
         let lng = 77.2090;
         let radius = 50;
         if (response.success && response.settings) {
-          lat = response.settings.geofence_lat || 28.6139;
-          lng = response.settings.geofence_lng || 77.2090;
-          radius = response.settings.geofence_radius || 50;
-          setOfficeCoords([lat, lng]);
-          setGeofenceRadius(radius);
+          lat = Number(response.settings.geofence_lat) || 28.6139;
+          lng = Number(response.settings.geofence_lng) || 77.2090;
+          radius = Number(response.settings.geofence_radius) || 50;
+          if (isComponentMounted.current) {
+            setOfficeCoords([lat, lng]);
+            setGeofenceRadius(radius);
+          }
         }
-        const initialEmp = [lat + 0.0003, lng + 0.0003];
-        setEmpCoords(initialEmp);
+        // Explicit Number() arithmetic — prevents string concatenation
+        const initialEmp = [Number(lat) + 0.0003, Number(lng) + 0.0003];
+        if (isComponentMounted.current) setEmpCoords(initialEmp);
         await syncCoordinates(initialEmp[0], initialEmp[1]);
       } catch (err) {
+        if (controller.signal.aborted) return; // Intentional abort, ignore
         console.error('[SETTINGS FETCH ERROR]:', err);
       } finally {
-        setLoadingSettings(false);
+        if (isComponentMounted.current) setLoadingSettings(false);
       }
     };
     initSandbox();
+    return () => {
+      isComponentMounted.current = false;
+      controller.abort();
+    };
   }, [user]);
 
   // Drag handler for leaflet marker
@@ -130,7 +169,12 @@ export default function GeofenceSandbox() {
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <motion.div 
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+    >
       {/* Interactive Map Visual Panel */}
       <div className="lg:col-span-2 space-y-4">
         <div className="glass-panel rounded-2xl p-4 overflow-hidden relative flex flex-col">
@@ -152,6 +196,8 @@ export default function GeofenceSandbox() {
               </div>
             ) : (
               <MapContainer
+                key="sandbox-geofence-map-static"
+                ref={mapRef}
                 center={officeCoords}
                 zoom={17}
                 scrollWheelZoom={true}
@@ -265,14 +311,14 @@ export default function GeofenceSandbox() {
                 <button
                   onClick={teleportInside}
                   disabled={updating}
-                  className="bg-cyber-green/10 hover:bg-cyber-green/20 border border-cyber-green/20 text-cyber-green text-xs font-bold py-2.5 px-3 rounded-lg uppercase tracking-wider"
+                  className="flex items-center justify-center gap-1.5 bg-cyber-green/10 hover:bg-cyber-green/20 border border-cyber-green/20 text-cyber-green text-xs font-bold py-2.5 px-3 rounded-xl uppercase tracking-wider transition-all hover:shadow-green-glow cursor-pointer disabled:opacity-50"
                 >
                   Jump Inside
                 </button>
                 <button
                   onClick={teleportOutside}
                   disabled={updating}
-                  className="bg-cyber-cyan/10 hover:bg-cyber-cyan/20 border border-cyber-cyan/20 text-cyber-cyan text-xs font-bold py-2.5 px-3 rounded-lg uppercase tracking-wider"
+                  className="flex items-center justify-center gap-1.5 bg-cyber-cyan/10 hover:bg-cyber-cyan/20 border border-cyber-cyan/20 text-cyber-cyan text-xs font-bold py-2.5 px-3 rounded-xl uppercase tracking-wider transition-all hover:shadow-cyan-glow cursor-pointer disabled:opacity-50"
                 >
                   Jump Outside
                 </button>
@@ -338,6 +384,6 @@ export default function GeofenceSandbox() {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }

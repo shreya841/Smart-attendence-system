@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth, supabase } from '../context/AuthContext.jsx';
 import { Shield, Key, Mail, AlertTriangle, Copy, CheckCircle } from 'lucide-react';
 
@@ -156,78 +157,85 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
   };
 
   return (
-    <div>
-      <h2 className="text-lg font-bold text-white text-center font-sans tracking-wide mb-6 uppercase">Authorize User Session</h2>
+    <motion.div
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+      className="font-mono text-slate-300"
+    >
+      <h2 className="text-sm font-bold text-white text-center font-mono tracking-widest mb-6 uppercase text-glow-cyan">
+        // SECURE GATEWAY AUTHORIZATION
+      </h2>
 
       {/* Interactive Supabase Diagnostic Center */}
       {dbDiagnostic && (
-        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs font-sans leading-relaxed">
+        <div className="mb-6 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl text-amber-200/90 text-xs font-mono leading-relaxed shadow-[0_0_15px_rgba(245,158,11,0.05)]">
           {dbDiagnostic.type === 'MISSING_TABLES' && (
             <>
-              <div className="flex items-center gap-2 text-amber-400 font-mono font-bold tracking-wider uppercase mb-2">
-                <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
-                Supabase Tables Missing
+              <div className="flex items-center gap-2 text-amber-400 font-bold tracking-wider uppercase mb-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                DATABASE SCHEMATICS MISSING
               </div>
-              <p className="mb-3 text-[11px]">
-                Your Supabase project is active, but the required database tables do not exist yet. 
+              <p className="mb-3 text-[10px] text-slate-400">
+                Supabase instance connected, but core ledger structures are absent. Run database initialization scripts.
               </p>
-              <div className="bg-slate-950/60 p-3 rounded-lg border border-amber-500/20 font-mono text-[9px] text-amber-300 overflow-x-auto max-h-32 mb-3 select-all">
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 font-mono text-[9px] text-amber-300/80 overflow-x-auto max-h-32 mb-3 select-all">
                 {schemaSql}
               </div>
-              <p className="mb-3 text-[11px]">
-                <strong>To Fix:</strong> Copy the SQL block above, open your <strong>Supabase Dashboard ➡️ SQL Editor ➡️ New Query</strong>, paste it, and click <strong>Run</strong>.
+              <p className="mb-3 text-[10px] text-slate-400">
+                ➡️ Copy SQL block above & execute in Supabase SQL editor workspace.
               </p>
               <button
                 type="button"
                 onClick={() => handleCopy(schemaSql)}
-                className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 rounded-xl text-amber-200 font-bold uppercase tracking-wider text-[10px] transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-300 font-bold uppercase tracking-wider text-[9px] transition-all duration-300 cursor-pointer flex items-center justify-center gap-2"
               >
                 {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? 'Copied successfully!' : 'Copy Table Creation SQL'}
+                {copied ? 'COPIED TO CLIPBOARD' : 'COPY SCHEMATICS SQL'}
               </button>
             </>
           )}
 
           {dbDiagnostic.type === 'RLS' && (
             <>
-              <div className="flex items-center gap-2 text-amber-400 font-mono font-bold tracking-wider uppercase mb-2">
-                <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
-                Row-Level Security / Privileges Denied
+              <div className="flex items-center gap-2 text-amber-400 font-bold tracking-wider uppercase mb-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                SECURITY BYPASS REQUIRED (RLS)
               </div>
-              <p className="mb-3 text-[11px]">
-                Your Supabase tables exist, but Row Level Security (RLS) or missing PostgreSQL table grants are blocking the browser client from reading settings.
+              <p className="mb-3 text-[10px] text-slate-400">
+                Supabase tables detected. Disable Row Level Security (RLS) policies to allow client-side sync.
               </p>
-              <div className="bg-slate-950/60 p-3 rounded-lg border border-amber-500/20 font-mono text-[9px] text-amber-300 overflow-x-auto max-h-32 mb-3 select-all">
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-white/5 font-mono text-[9px] text-amber-300/80 overflow-x-auto max-h-32 mb-3 select-all">
                 {rlsSql}
               </div>
-              <p className="mb-3 text-[11px]">
-                <strong>To Fix:</strong> Copy the code above, open your <strong>Supabase Dashboard ➡️ SQL Editor ➡️ New Query</strong>, paste it, and click <strong>Run</strong>.
+              <p className="mb-3 text-[10px] text-slate-400">
+                ➡️ Copy SQL block above & execute in Supabase SQL editor workspace.
               </p>
               <button
                 type="button"
                 onClick={() => handleCopy(rlsSql)}
-                className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/30 rounded-xl text-amber-200 font-bold uppercase tracking-wider text-[10px] transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl text-amber-300 font-bold uppercase tracking-wider text-[9px] transition-all duration-300 cursor-pointer flex items-center justify-center gap-2"
               >
                 {copied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                {copied ? 'Copied successfully!' : 'Copy Privilege Bypass SQL'}
+                {copied ? 'COPIED TO CLIPBOARD' : 'COPY BYPASS SQL'}
               </button>
             </>
           )}
 
           {dbDiagnostic.type === 'OTHER' && (
             <>
-              <div className="flex items-center gap-2 text-rose-400 font-mono font-bold tracking-wider uppercase mb-2">
+              <div className="flex items-center gap-2 text-rose-400 font-bold tracking-wider uppercase mb-2">
                 <AlertTriangle className="w-4.5 h-4.5 shrink-0" />
-                Supabase Connection Error
+                ENDPOINT HANDSHAKE FAILURE
               </div>
-              <p className="mb-2 text-[11px]">
-                An unexpected database connection error was reported by the Supabase API:
+              <p className="mb-2 text-[10px] text-slate-400">
+                API connection terminated:
               </p>
-              <div className="bg-slate-950/60 p-3 rounded-lg border border-rose-500/20 font-mono text-[10px] text-rose-300 overflow-x-auto mb-1">
+              <div className="bg-slate-950/70 p-3 rounded-xl border border-rose-500/20 font-mono text-[10px] text-rose-400 overflow-x-auto mb-1">
                 {dbDiagnostic.message}
               </div>
-              <p className="text-[9px] text-slate-400 leading-normal mt-2">
-                Ensure your Supabase project is active, your internet is online, and your <strong>VITE_SUPABASE_URL</strong> is configured correctly.
+              <p className="text-[8px] text-slate-500 leading-normal mt-2">
+                VERIFY LOCAL ENVIRONMENT DEPLOYMENT PARAMETERS (VITE_SUPABASE_URL / ANON_KEY).
               </p>
             </>
           )}
@@ -236,39 +244,39 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
 
       {/* Form Validation Errors */}
       {error && error !== 'DATABASE_RLS_BLOCKED' && (
-        <div className="mb-4 p-3.5 bg-cyber-red/10 border border-cyber-red/20 rounded-xl text-cyber-red flex items-start gap-2.5 text-xs font-mono">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div className="mb-4 p-3.5 bg-cyber-red/5 border border-cyber-red/20 rounded-xl text-cyber-red flex items-start gap-2.5 text-xs font-mono shadow-[0_0_15px_rgba(239,68,68,0.05)]">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 animate-pulse" />
           <span>{error}</span>
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-[10px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-2">Corporate Email</label>
+          <label className="block text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-2">Corporate Identity (Email)</label>
           <div className="relative">
-            <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
+            <Mail className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500 transition-colors group-focus-within:text-cyber-cyan" />
             <input
               type="email"
               required
               placeholder="e.g. employee@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full glass-input pl-11 text-sm text-slate-200"
+              className="w-full bg-slate-950/40 border border-white/5 focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan rounded-xl pl-11 pr-4 py-3.5 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all duration-200 backdrop-blur-md shadow-inner"
             />
           </div>
         </div>
 
         <div>
-          <label className="block text-[10px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-2">Security Keyphrase</label>
+          <label className="block text-[9px] font-bold tracking-widest text-slate-500 uppercase mb-2">Security Keyphrase (Password)</label>
           <div className="relative">
             <Key className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-500" />
             <input
               type="password"
               required
-              placeholder="Enter password..."
+              placeholder="••••••••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full glass-input pl-11 text-sm text-slate-200"
+              className="w-full bg-slate-950/40 border border-white/5 focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan rounded-xl pl-11 pr-4 py-3.5 text-xs text-slate-200 placeholder-slate-600 outline-none transition-all duration-200 backdrop-blur-md shadow-inner"
             />
           </div>
         </div>
@@ -276,16 +284,16 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
         <button
           type="submit"
           disabled={submitting}
-          className="w-full mt-4 flex items-center justify-center gap-2 bg-gradient-to-r from-cyber-blue to-cyber-cyan hover:shadow-cyan-glow text-white font-semibold py-3.5 px-4 rounded-xl border border-cyan-400/20 active:scale-[0.98] transition-all duration-200 text-xs font-mono uppercase tracking-wider disabled:opacity-50"
+          className="w-full mt-4 flex items-center justify-center gap-2 bg-gradient-to-r from-cyber-blue to-cyber-cyan text-slate-950 font-bold py-3.5 px-4 rounded-xl border border-cyan-400/20 active:scale-[0.98] hover:shadow-cyan-glow transition-all duration-300 text-xs uppercase tracking-widest cursor-pointer disabled:opacity-50"
         >
-          <Shield className="w-4 h-4" />
-          {submitting ? 'Authenticating...' : 'Establish Secure Connection'}
+          <Shield className="w-4 h-4 text-slate-950" />
+          {submitting ? 'VALIDATING SIGNATURE...' : 'Establish Secure Connection'}
         </button>
       </form>
 
       {/* Quick Access Credentials Panel */}
-      <div className="mt-6 p-4 rounded-xl border border-white/5 bg-slate-950/30 backdrop-blur-md">
-        <h3 className="text-[9px] font-mono font-bold tracking-widest text-slate-400 uppercase mb-3 text-center">Quick Access Enclaves</h3>
+      <div className="mt-6 p-4 rounded-2xl border border-white/5 bg-slate-950/20 backdrop-blur-md">
+        <h3 className="text-[8px] font-bold tracking-widest text-slate-500 uppercase mb-3 text-center">// BYPASS KEYCARD SLOTS</h3>
         <div className="grid grid-cols-2 gap-2.5">
           <button
             type="button"
@@ -293,11 +301,11 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
               setEmail('admin@company.com');
               setPassword('adminpassword');
             }}
-            className="flex flex-col items-center justify-center p-2.5 rounded-lg border border-cyber-cyan/10 hover:border-cyber-cyan/40 bg-cyber-cyan/5 hover:bg-cyber-cyan/15 transition-all duration-300 text-center cursor-pointer group"
+            className="glass-card-futuristic flex flex-col items-center justify-center p-3 rounded-xl border border-white/5 text-center cursor-pointer group"
           >
-            <span className="text-[10px] font-mono font-bold text-cyber-cyan group-hover:text-cyan-300">ADMINISTRATOR</span>
-            <span className="text-[8px] font-mono text-slate-400 mt-1 select-none font-semibold">admin@company.com</span>
-            <span className="text-[7px] font-mono text-slate-500 select-none">pass: adminpassword</span>
+            <span className="text-[9px] font-bold text-cyber-cyan group-hover:text-cyan-300 transition-colors tracking-widest">SYS_ADMIN</span>
+            <span className="text-[8px] text-slate-400 mt-1 select-none font-semibold truncate w-full px-1">admin@company.com</span>
+            <span className="text-[7px] text-slate-500 select-none">pass: adminpassword</span>
           </button>
           <button
             type="button"
@@ -305,20 +313,20 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
               setEmail('employee@company.com');
               setPassword('employeepassword');
             }}
-            className="flex flex-col items-center justify-center p-2.5 rounded-lg border border-cyber-blue/10 hover:border-cyber-blue/40 bg-cyber-blue/5 hover:bg-cyber-blue/15 transition-all duration-300 text-center cursor-pointer group"
+            className="glass-card-futuristic flex flex-col items-center justify-center p-3 rounded-xl border border-white/5 text-center cursor-pointer group"
           >
-            <span className="text-[10px] font-mono font-bold text-cyber-blue group-hover:text-blue-300">EMPLOYEE</span>
-            <span className="text-[8px] font-mono text-slate-400 mt-1 select-none font-semibold">employee@company.com</span>
-            <span className="text-[7px] font-mono text-slate-500 select-none">pass: employeepassword</span>
+            <span className="text-[9px] font-bold text-cyber-blue group-hover:text-blue-300 transition-colors tracking-widest">EMP_CORE</span>
+            <span className="text-[8px] text-slate-400 mt-1 select-none font-semibold truncate w-full px-1">employee@company.com</span>
+            <span className="text-[7px] text-slate-500 select-none">pass: employeepassword</span>
           </button>
         </div>
       </div>
 
       <div className="mt-6 text-center">
-        <p className="text-[10px] font-mono text-slate-500">
-          Biometric enrollment restricted. Contact System Administrator.
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest">
+          Biometric registration restricted. Contact System Operations Center.
         </p>
       </div>
-    </div>
+    </motion.div>
   );
 }

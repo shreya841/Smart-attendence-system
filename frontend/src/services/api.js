@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabaseClient.js';
 
+// URL/key for isolated temp clients (employee signup - no session persistence)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
 const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder').replace('anon public ', '').trim();
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
 // 1. BIOMETRIC CRYPTOGRAPHY (Web Crypto API)
@@ -198,6 +199,18 @@ const broadcastRealtimeEvent = async (eventName, payload) => {
 // 4. API CALL INTERCEPT ENGINE (100% Serverless)
 // ==========================================
 
+const cache = {
+  employees: {}, // id-based cache
+  employeesList: null,
+  employeeTemplates: null, // Cache for employees with face_data descriptors
+  settings: null,
+  geofence: null,
+  attendance: null,
+  logs: null,
+  myLogs: {}, // email-based my-logs cache
+  attendanceHistory: {} // employeeId-based history cache
+};
+
 const matchRoute = (path, pattern) => {
   const pathParts = path.split('/').filter(Boolean);
   const patternParts = pattern.split('/').filter(Boolean);
@@ -219,6 +232,26 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
   try {
     // 1. GET /employees (Fetch all employees)
     if (endpoint === '/employees' && method === 'GET') {
+      if (cache.employeesList) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data, error } = await supabase
+              .from('employees')
+              .select('id, name, email, role, department, avatar, status, latitude, longitude, created_at, face_data');
+            if (!error && data) {
+              const employees = data.map(emp => ({
+                ...emp,
+                is_face_registered: emp.face_data !== null
+              }));
+              employees.forEach(emp => delete emp.face_data);
+              cache.employeesList = employees;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, employees: cache.employeesList };
+      }
+
       const { data, error } = await supabase
         .from('employees')
         .select('id, name, email, role, department, avatar, status, latitude, longitude, created_at, face_data');
@@ -228,19 +261,49 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         is_face_registered: emp.face_data !== null
       }));
       employees.forEach(emp => delete emp.face_data);
+      cache.employeesList = employees;
       return { success: true, employees };
     }
 
     // 2. POST /employees (Add Employee & Silently create in Supabase Auth)
     if (endpoint === '/employees' && method === 'POST') {
-      const { id, name, email, password, role, department } = body;
-      
-      const { createClient } = await import('@supabase/supabase-js');
+      cache.employeesList = null; // Invalidate
+      cache.employeeTemplates = null; // Invalidate
+      const { id, name, email, password, role, department, face_data } = body;
+
+      // ===== DUPLICATE FACE PROTECTION =====
+      // Before registering, check that no existing employee shares this face descriptor.
+      if (face_data) {
+        try {
+          const newDescriptor = await decryptDescriptor(face_data);
+          if (newDescriptor) {
+            const { data: existingEmps } = await supabase
+              .from('employees')
+              .select('id, name, face_data')
+              .not('face_data', 'is', null);
+
+            const DUPLICATE_THRESHOLD = 0.40;
+            for (const emp of (existingEmps || [])) {
+              const existingDescriptor = await decryptDescriptor(emp.face_data);
+              if (!existingDescriptor) continue;
+              const dist = calculateEuclideanDistance(newDescriptor, existingDescriptor);
+              if (dist < DUPLICATE_THRESHOLD) {
+                throw new Error(`Duplicate biometric detected: This face is already registered under employee "${emp.name}" (${emp.id}). Each employee must have a unique face enrollment.`);
+              }
+            }
+          }
+        } catch (dupErr) {
+          if (dupErr.message.includes('Duplicate biometric')) throw dupErr;
+          console.warn('[DUPLICATE FACE CHECK WARN]:', dupErr.message);
+        }
+      }
+      // ===== END DUPLICATE FACE PROTECTION =====
+
       const tempClient = createClient(supabaseUrl, supabaseKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
 
-      const { data: authData, error: authError } = await tempClient.auth.signUp({
+      const { error: authError } = await tempClient.auth.signUp({
         email,
         password,
         options: { data: { name, role, department } }
@@ -252,7 +315,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
       // Add to employees table
       const { error: dbError } = await supabase.from('employees').insert({
-        id, name, email, password, role, department, status: 'Offline'
+        id, name, email, password, role, department, face_data: face_data || null, status: 'Offline'
       });
 
       if (dbError) throw new Error(`Database record insertion failed: ${dbError.message}`);
@@ -262,10 +325,33 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 3. GET /employees/:id (Fetch single employee details)
     const empMatch = matchRoute(endpoint, '/employees/:id');
     if (empMatch && method === 'GET') {
+      const empId = empMatch.id;
+      if (cache.employees[empId]) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data, error } = await supabase
+              .from('employees')
+              .select('id, name, email, role, department, avatar, status, latitude, longitude, created_at, face_data')
+              .eq('id', empId)
+              .single();
+            if (!error && data) {
+              const employee = {
+                ...data,
+                is_face_registered: data.face_data !== null
+              };
+              delete employee.face_data;
+              cache.employees[empId] = employee;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, employee: cache.employees[empId] };
+      }
+
       const { data, error } = await supabase
         .from('employees')
         .select('id, name, email, role, department, avatar, status, latitude, longitude, created_at, face_data')
-        .eq('id', empMatch.id)
+        .eq('id', empId)
         .single();
       if (error) throw new Error(error.message);
       const employee = {
@@ -273,17 +359,22 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         is_face_registered: data.face_data !== null
       };
       delete employee.face_data;
+      cache.employees[empId] = employee;
       return { success: true, employee };
     }
 
     // 4. PUT /employees/:id (Update employee profile details)
     const empUpdateMatch = matchRoute(endpoint, '/employees/:id');
     if (empUpdateMatch && method === 'PUT') {
+      const empId = empUpdateMatch.id;
+      cache.employeesList = null; // Invalidate
+      delete cache.employees[empId]; // Invalidate
+
       const { name, email, role, department, password } = body;
       const updates = { name, email, role, department };
       if (password) updates.password = password;
       
-      const { error } = await supabase.from('employees').update(updates).eq('id', empUpdateMatch.id);
+      const { error } = await supabase.from('employees').update(updates).eq('id', empId);
       if (error) throw new Error(error.message);
       return { success: true, message: 'Employee profile updated successfully.' };
     }
@@ -291,7 +382,12 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 5. DELETE /employees/:id (Delete employee record)
     const empDeleteMatch = matchRoute(endpoint, '/employees/:id');
     if (empDeleteMatch && method === 'DELETE') {
-      const { error } = await supabase.from('employees').delete().eq('id', empDeleteMatch.id);
+      const empId = empDeleteMatch.id;
+      cache.employeesList = null; // Invalidate
+      cache.employeeTemplates = null; // Invalidate
+      delete cache.employees[empId]; // Invalidate
+
+      const { error } = await supabase.from('employees').delete().eq('id', empId);
       if (error) throw new Error(error.message);
       return { success: true, message: 'Employee profile deleted successfully.' };
     }
@@ -299,8 +395,22 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 6. POST /employees/:id/face (Enroll facial biometric template)
     const faceMatch = matchRoute(endpoint, '/employees/:id/face');
     if (faceMatch && method === 'POST') {
-      const { faceDescriptor } = body;
       const empId = faceMatch.id;
+      cache.employeesList = null; // Invalidate
+      cache.employeeTemplates = null; // Invalidate
+      delete cache.employees[empId]; // Invalidate
+      const { faceDescriptor } = body;
+
+      // Quality Validation
+      if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length === 0) {
+        throw new Error('Biometric enrollment requires a non-empty face descriptor array.');
+      }
+      if (faceDescriptor.length !== 128) {
+        throw new Error(`Invalid biometric face descriptor dimension: expected 128, got ${faceDescriptor.length}`);
+      }
+      if (faceDescriptor.every(val => val === 0)) {
+        throw new Error('Biometric descriptor contains only zeros. Invalid face template.');
+      }
 
       // Duplicate Check
       const { data: existingFaces, error: fetchError } = await supabase
@@ -310,12 +420,13 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         .neq('id', empId);
       if (fetchError) throw new Error(fetchError.message);
 
+      const DUPLICATE_THRESHOLD = 0.55;
       for (const emp of (existingFaces || [])) {
         const dbDescriptor = await decryptDescriptor(emp.face_data);
         if (!dbDescriptor) continue;
         const distance = calculateEuclideanDistance(faceDescriptor, dbDescriptor);
-        if (distance <= 0.55) {
-          throw new Error(`This biometric identity already belongs to ${emp.name}.`);
+        if (distance <= DUPLICATE_THRESHOLD) {
+          throw new Error(`Duplicate biometric detected: This face is already registered under employee "${emp.name}" (${emp.id}). Each employee must have a unique face enrollment.`);
         }
       }
 
@@ -332,13 +443,33 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 7. POST /employees/:id/reset-face (Clear facial template)
     const faceResetMatch = matchRoute(endpoint, '/employees/:id/reset-face');
     if (faceResetMatch && method === 'POST') {
-      const { error } = await supabase.from('employees').update({ face_data: null }).eq('id', faceResetMatch.id);
+      const empId = faceResetMatch.id;
+      cache.employeesList = null; // Invalidate
+      cache.employeeTemplates = null; // Invalidate
+      delete cache.employees[empId]; // Invalidate
+
+      const { error } = await supabase.from('employees').update({ face_data: null }).eq('id', empId);
       if (error) throw new Error(error.message);
       return { success: true, message: 'Biometric face descriptor removed successfully.' };
     }
 
     // 8. GET /settings (Fetch settings ledger)
     if (endpoint === '/settings' && method === 'GET') {
+      if (cache.settings) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data, error } = await supabase.from('settings').select('*');
+            if (!error && data) {
+              const settingsObj = {};
+              data.forEach(row => { settingsObj[row.key] = row.value; });
+              if (Object.keys(settingsObj).length > 0) cache.settings = settingsObj;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, settings: cache.settings };
+      }
+
       const { data, error } = await supabase.from('settings').select('*');
       if (error) throw new Error(error.message);
       const settingsObj = {};
@@ -351,11 +482,13 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         settingsObj['geofence_lng'] = '77.2090';
         settingsObj['geofence_radius'] = '100';
       }
+      cache.settings = settingsObj;
       return { success: true, settings: settingsObj };
     }
 
     // 9. POST /settings (Writhe settings ledger values)
     if (endpoint === '/settings' && method === 'POST') {
+      cache.settings = null; // Invalidate
       const rows = Object.entries(body).map(([key, val]) => ({ key, value: String(val) }));
       const { error } = await supabase.from('settings').upsert(rows);
       if (error) throw new Error(error.message);
@@ -364,6 +497,22 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
     // 10. GET /settings/geofence (Get polygon coordinates)
     if (endpoint === '/settings/geofence' && method === 'GET') {
+      if (cache.geofence) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data } = await supabase
+              .from('office_geofence')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (data) cache.geofence = data;
+          } catch (e) {}
+        }, 50);
+        return { success: true, geofence: cache.geofence };
+      }
+
       const { data, error } = await supabase
         .from('office_geofence')
         .select('*')
@@ -371,11 +520,13 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         .limit(1)
         .maybeSingle();
       if (error) throw new Error(error.message);
+      cache.geofence = data || null;
       return { success: true, geofence: data || null };
     }
 
     // 11. POST /settings/geofence (Add geofence polygon)
     if (endpoint === '/settings/geofence' && method === 'POST') {
+      cache.geofence = null; // Invalidate
       const { officeName, polygonCoordinates, createdBy } = body;
       const { error } = await supabase.from('office_geofence').insert({
         office_name: officeName,
@@ -388,6 +539,29 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
     // 12. GET /attendance (Get unified check in records)
     if (endpoint === '/attendance' && method === 'GET') {
+      if (cache.attendance) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data } = await supabase
+              .from('attendance')
+              .select('*, employees (name, department)')
+              .order('date', { ascending: false })
+              .order('check_in', { ascending: false });
+            if (data) {
+              const logs = data.map(item => ({
+                ...item,
+                name: item.employees?.name,
+                department: item.employees?.department
+              }));
+              logs.forEach(item => delete item.employees);
+              cache.attendance = logs;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, logs: cache.attendance };
+      }
+
       const { data, error } = await supabase
         .from('attendance')
         .select('*, employees (name, department)')
@@ -401,11 +575,17 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         department: item.employees?.department
       }));
       logs.forEach(item => delete item.employees);
+      cache.attendance = logs;
       return { success: true, logs };
     }
 
     // 13. POST /attendance/clear (Wipe attendance ledger)
     if (endpoint === '/attendance/clear' && method === 'POST') {
+      cache.attendance = null; // Invalidate
+      cache.employeesList = null; // Invalidate
+      cache.employees = {}; // Invalidate
+      cache.logs = null; // Invalidate
+      
       const { error: attErr } = await supabase.from('attendance').delete().neq('id', 0);
       if (attErr) throw new Error(attErr.message);
 
@@ -415,22 +595,151 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
       return { success: true, message: 'All attendance records have been wiped successfully.' };
     }
 
+    // GET /logs (Fetch all logs with employee names)
+    if (endpoint === '/logs' && method === 'GET') {
+      if (cache.logs) {
+        // Background refresh
+        setTimeout(async () => {
+          try {
+            const { data } = await supabase
+              .from('logs')
+              .select('*, employees(name, department)')
+              .order('timestamp', { ascending: false });
+            if (data) {
+              const formattedLogs = data.map(log => ({
+                ...log,
+                employee_name: log.employees?.name,
+                name: log.employees?.name,
+                department: log.employees?.department
+              }));
+              cache.logs = formattedLogs;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, logs: cache.logs };
+      }
+
+      const { data, error } = await supabase
+        .from('logs')
+        .select('*, employees(name, department)')
+        .order('timestamp', { ascending: false });
+      
+      if (error) throw new Error(error.message);
+      
+      const formattedLogs = (data || []).map(log => ({
+        ...log,
+        employee_name: log.employees?.name,
+        name: log.employees?.name,
+        department: log.employees?.department
+      }));
+      cache.logs = formattedLogs;
+      return { success: true, logs: formattedLogs };
+    }
+
+    // GET /logs/my-logs (Fetch personal logs for standard employee)
+    if (endpoint === '/logs/my-logs' && method === 'GET') {
+      // Synchronous LocalStorage session extraction
+      const userStr = localStorage.getItem('quantum_user');
+      const cachedUser = userStr ? JSON.parse(userStr) : null;
+      const myEmail = cachedUser?.email;
+      
+      if (!myEmail) throw new Error('Not authenticated.');
+
+      if (cache.myLogs[myEmail]) {
+        // Background SWR refresh
+        setTimeout(async () => {
+          try {
+            const { data: myEmp } = await supabase
+              .from('employees')
+              .select('id, name, department')
+              .eq('email', myEmail)
+              .single();
+              
+            if (myEmp) {
+              const { data } = await supabase
+                .from('logs')
+                .select('*')
+                .eq('employee_id', myEmp.id)
+                .order('timestamp', { ascending: false });
+                
+              if (data) {
+                const formattedLogs = data.map(log => ({
+                  ...log,
+                  employee_name: myEmp.name,
+                  name: myEmp.name,
+                  department: myEmp.department
+                }));
+                cache.myLogs[myEmail] = formattedLogs;
+              }
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, logs: cache.myLogs[myEmail] };
+      }
+      
+      const { data: myEmp } = await supabase
+        .from('employees')
+        .select('id, name, department')
+        .eq('email', myEmail)
+        .single();
+        
+      if (!myEmp) throw new Error('Employee profile not found.');
+
+      const { data, error } = await supabase
+        .from('logs')
+        .select('*')
+        .eq('employee_id', myEmp.id)
+        .order('timestamp', { ascending: false });
+        
+      if (error) throw new Error(error.message);
+      
+      const formattedLogs = (data || []).map(log => ({
+        ...log,
+        employee_name: myEmp.name,
+        name: myEmp.name,
+        department: myEmp.department
+      }));
+      cache.myLogs[myEmail] = formattedLogs;
+      return { success: true, logs: formattedLogs };
+    }
+
     // 14. POST /logs/clear (Clear event logs)
     if (endpoint === '/logs/clear' && method === 'POST') {
+      cache.logs = null; // Invalidate
+      cache.myLogs = {}; // Invalidate
       const { error } = await supabase.from('logs').delete().neq('id', 0);
       if (error) throw new Error(error.message);
-      return { success: true, message: 'System audit logs cleared successfully.' };
+      return { success: true, message: 'All event logs have been cleared successfully.' };
     }
 
     // 15. GET /attendance/history/:employeeId (Fetch history for employee)
     const histMatch = matchRoute(endpoint, '/attendance/history/:employeeId');
     if (histMatch && method === 'GET') {
+      const empId = histMatch.employeeId;
+      if (cache.attendanceHistory[empId]) {
+        // Background SWR refresh
+        setTimeout(async () => {
+          try {
+            const { data } = await supabase
+              .from('attendance')
+              .select('*')
+              .eq('employee_id', empId)
+              .order('date', { ascending: false });
+            if (data) {
+              cache.attendanceHistory[empId] = data;
+            }
+          } catch (e) {}
+        }, 50);
+        return { success: true, history: cache.attendanceHistory[empId] };
+      }
+
       const { data, error } = await supabase
         .from('attendance')
         .select('*')
-        .eq('employee_id', histMatch.employeeId)
+        .eq('employee_id', empId)
         .order('date', { ascending: false });
       if (error) throw new Error(error.message);
+      cache.attendanceHistory[empId] = data || [];
       return { success: true, history: data || [] };
     }
 
@@ -525,6 +834,14 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 17. POST /employees/reset-db (Database seeder engine client-side)
     if (endpoint === '/employees/reset-db' && method === 'POST') {
       console.log('[DATABASE RESET REQUESTED]: Purging tables...');
+      cache.employees = {};
+      cache.employeesList = null;
+      cache.settings = null;
+      cache.geofence = null;
+      cache.attendance = null;
+      cache.logs = null;
+      cache.myLogs = {};
+      cache.attendanceHistory = {};
       await supabase.from('logs').delete().neq('id', 0);
       await supabase.from('attendance').delete().neq('id', 0);
       await supabase.from('employees').delete().neq('id', '0');
@@ -536,7 +853,6 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         { key: 'geofence_radius', value: '100' }
       ]);
 
-      const { createClient } = await import('@supabase/supabase-js');
       const tempClient = createClient(supabaseUrl, supabaseKey, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
@@ -604,37 +920,84 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
     // 18. POST /attendance/scan (Face recognition kiosk scan engine client-side)
     if (endpoint === '/attendance/scan' && method === 'POST') {
+      cache.attendance = null;
+      cache.logs = null;
+      cache.myLogs = {};
+      cache.attendanceHistory = {};
       const { faceDescriptor, faceMetrics, location, userCoords } = body;
       
+      console.log('[BIOMETRIC SCAN INTERCEPT]: Received scan request');
+      console.log('[BIOMETRIC SCAN INTERCEPT]: Incoming descriptor type:', typeof faceDescriptor, 'isArray:', Array.isArray(faceDescriptor));
+      if (faceDescriptor && Array.isArray(faceDescriptor)) {
+        console.log('[BIOMETRIC SCAN INTERCEPT]: Incoming descriptor dimensions:', faceDescriptor.length);
+        console.log('[BIOMETRIC SCAN INTERCEPT]: Incoming descriptor snippet:', faceDescriptor.slice(0, 5));
+      }
+
       if (!faceDescriptor || !Array.isArray(faceDescriptor)) {
         throw new Error('Invalid or missing biometric descriptor.');
       }
+      if (faceDescriptor.length !== 128) {
+        throw new Error(`Invalid biometric face descriptor dimension: expected 128, got ${faceDescriptor.length}`);
+      }
 
-      // Fetch active templates
-      const { data: employees, error: fetchErr } = await supabase
-        .from('employees')
-        .select('id, name, department, face_data')
-        .not('face_data', 'is', null);
-      if (fetchErr) throw new Error(fetchErr.message);
+      // Fetch active templates (use cache if available)
+      let decryptedEmployees = cache.employeeTemplates;
+      if (!decryptedEmployees) {
+        console.log('[BIOMETRIC SCAN INTERCEPT]: Cache miss. Fetching templates from Supabase...');
+        const { data: employees, error: fetchErr } = await supabase
+          .from('employees')
+          .select('id, name, department, face_data')
+          .not('face_data', 'is', null);
+        if (fetchErr) {
+          console.error('[BIOMETRIC SCAN INTERCEPT ERROR]: Failed fetching templates:', fetchErr);
+          throw new Error(fetchErr.message);
+        }
+
+        decryptedEmployees = [];
+        for (const emp of (employees || [])) {
+          try {
+            const dbDescriptor = await decryptDescriptor(emp.face_data);
+            if (dbDescriptor) {
+              decryptedEmployees.push({
+                id: emp.id,
+                name: emp.name,
+                department: emp.department,
+                descriptor: dbDescriptor
+              });
+            } else {
+              console.warn(`[BIOMETRIC SCAN INTERCEPT]: Decrypted descriptor is null for Employee ID ${emp.id}`);
+            }
+          } catch (decErr) {
+            console.error(`[BIOMETRIC SCAN INTERCEPT ERROR]: Decryption exception for employee ID ${emp.id}:`, decErr);
+          }
+        }
+        cache.employeeTemplates = decryptedEmployees;
+        console.log(`[BIOMETRIC SCAN INTERCEPT]: Successfully loaded and cached ${decryptedEmployees.length} face templates.`);
+      } else {
+        console.log(`[BIOMETRIC SCAN INTERCEPT]: Cache hit. Using ${decryptedEmployees.length} cached face templates.`);
+      }
 
       let bestMatch = null;
       let bestDistance = Infinity;
-      const threshold = 0.45;
+      const threshold = 0.55; // Relaxed threshold for reliable matching (up from 0.45)
+      console.log('[BIOMETRIC SCAN INTERCEPT]: Using distance matching threshold:', threshold);
 
-      for (const emp of (employees || [])) {
-        const dbDescriptor = await decryptDescriptor(emp.face_data);
-        if (!dbDescriptor) continue;
-        const distance = calculateEuclideanDistance(faceDescriptor, dbDescriptor);
+      for (const emp of decryptedEmployees) {
+        const distance = calculateEuclideanDistance(faceDescriptor, emp.descriptor);
+        console.log(`[BIOMETRIC SCAN INTERCEPT]: Distance to ${emp.name} (ID: ${emp.id}): ${distance.toFixed(4)}`);
         if (distance < bestDistance) {
           bestDistance = distance;
           bestMatch = emp;
         }
       }
 
+      console.log(`[BIOMETRIC SCAN INTERCEPT SUMMARY]: Best Match: ${bestMatch ? bestMatch.name : 'None'}, Distance: ${bestDistance.toFixed(4)}`);
+
       // Unknown face check
       if (!bestMatch || bestDistance > threshold) {
         const confidence = bestDistance !== Infinity ? Math.max(0, 1 - bestDistance) : 0;
-        
+        console.warn(`[BIOMETRIC SCAN INTERCEPT MATCH FAILURE]: Best distance ${bestDistance.toFixed(4)} exceeds threshold ${threshold}`);
+
         await supabase.from('logs').insert({
           employee_id: null,
           event_type: 'UNAUTHORIZED_SCAN',
@@ -668,10 +1031,12 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
       const name = bestMatch.name;
       const department = bestMatch.department;
       const confidence = Math.max(0, 1 - bestDistance);
+      console.log(`[BIOMETRIC SCAN INTERCEPT MATCH SUCCESS]: Scanned person is ${name} (${employeeId}) with confidence ${confidence.toFixed(4)}`);
 
       // Anti-spoofing check
       const liveness = verifyLiveness(faceMetrics);
       if (!liveness.passed) {
+        console.warn(`[BIOMETRIC SCAN INTERCEPT SECURITY]: Liveness check failed for ${name}`);
         await supabase.from('logs').insert({
           employee_id: employeeId,
           event_type: 'SPOOF_ATTEMPT',
@@ -869,13 +1234,21 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
           ? `Welcome, ${name}. You are checked in. Late by ${lateMinutes} minutes.`
           : `Welcome, ${name}. You are checked in on time.`;
 
+        // Voice Greeting formatting
+        const checkInTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let voiceMessage = `Welcome ${name}. Check-in time: ${checkInTimeStr}.`;
+        if (isLate) {
+          voiceMessage += ` You are ${lateMinutes} minutes late.`;
+        }
+
         return {
           success: true,
           message: responseMessage,
           employee: { id: employeeId, name, department },
           eventType,
           lateDuration: isLate ? `${lateMinutes} mins` : 'On Time',
-          isLate
+          isLate,
+          voiceMessage
         };
 
       } else {
@@ -934,13 +1307,18 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         });
 
         responseMessage = `Goodbye, ${name}. Checked out successfully. Time worked: ${workingHours} hours.`;
+        
+        // Voice Greeting formatting
+        const checkOutTimeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const voiceMessage = `Goodbye ${name}. Check-out time: ${checkOutTimeStr}.`;
 
         return {
           success: true,
           message: responseMessage,
           employee: { id: employeeId, name, department },
           eventType,
-          workingHours
+          workingHours,
+          voiceMessage
         };
       }
     }

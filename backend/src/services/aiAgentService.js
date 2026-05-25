@@ -7,15 +7,18 @@ import { getDb } from '../database/db.js';
 export const synthesizeVoiceGreeting = (employeeName, eventDetails) => {
   const { eventType, timeString, lateMinutes, lateDuration } = eventDetails;
   
+  const timeText = timeString || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   if (eventType === 'CHECK_IN') {
+    let msg = `Welcome ${employeeName}. Check-in time: ${timeText}.`;
     if (lateMinutes && lateMinutes > 0) {
-      return `Access granted. Welcome back, ${employeeName}. You are checked in. You are late by ${lateDuration || `${lateMinutes} minutes`}.`;
+      msg += ` You are ${lateMinutes} minutes late.`;
     }
-    return `Access granted. Welcome back, ${employeeName}. You are checked in on time.`;
+    return msg;
   }
   
   if (eventType === 'CHECK_OUT') {
-    return `Access granted. Goodbye, ${employeeName}. Exit registered successfully.`;
+    return `Goodbye ${employeeName}. Check-out time: ${timeText}.`;
   }
 
   if (eventType === 'UNAUTHORIZED_SCAN') {

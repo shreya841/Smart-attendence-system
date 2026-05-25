@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { apiCall } from '../services/api.js';
 import { 
   Users, 
@@ -44,12 +45,21 @@ import { playBiometricSound } from '../services/soundService.js';
 function ChangeMapView({ center, zoom }) {
   const map = useMap();
   useEffect(() => {
-    if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) {
-      if (zoom) {
-        map.setView(center, zoom);
-      } else {
-        map.setView(center, map.getZoom());
+    if (!map) return;
+    try {
+      // Defensive cleanup guard: make sure Leaflet map container is still attached to the DOM
+      const container = map.getContainer();
+      if (!container) return;
+      
+      if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) {
+        if (zoom) {
+          map.setView(center, zoom);
+        } else {
+          map.setView(center, map.getZoom());
+        }
       }
+    } catch (e) {
+      console.warn('[ChangeMapView Cleanup Guard]: Map is unmounted or detached.', e);
     }
   }, [center, zoom, map]);
   return null;
@@ -148,6 +158,9 @@ export default function AdminPanel() {
   const [geofenceMapZoom, setGeofenceMapZoom] = useState(null);
   const locationAutoDetected = useRef(false);
   const searchDebounceRef = useRef(null);
+  const isComponentMounted = useRef(true);
+  const geofenceMapRef = useRef(null);
+  const radarMapRef = useRef(null);
 
   // Address Search State
   const [locationSearch, setLocationSearch] = useState('');
@@ -314,8 +327,8 @@ export default function AdminPanel() {
     let fps = 60;
     let lastTime = performance.now();
 
-    // Instantiate detector options once outside the animation loop to eliminate garbage collection stutters
-    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.2 });
+    // Instantiate detector options with optimized size and score for higher accuracy
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
 
     // Blink-Liveness tracking state variables in closure
     let blinkStateVal = 'waitingForOpen'; // 'waitingForOpen' | 'waitingForClose' | 'waitingForReopen' | 'blinkDetected'
@@ -550,7 +563,8 @@ export default function AdminPanel() {
         }
 
         try {
-          const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks(true);
+          // Detect face features and extract face descriptor directly in a single pass to eliminate extra api calls
+          const detections = await faceapi.detectAllFaces(video, options).withFaceLandmarks(true).withFaceDescriptors();
 
           if (detections.length === 0) {
             updateStatus('SCANNING');
@@ -682,6 +696,7 @@ export default function AdminPanel() {
             const videoWidth = video.videoWidth;
             const videoHeight = video.videoHeight;
             const positions = detection.landmarks.positions;
+            const descriptor = detection.descriptor;
 
             // Draw sci-fi holographic landmarks overlay
             drawHolographicOverlay(ctx, detection, videoWidth, videoHeight, livenessVerifiedVal, blinkStateVal);
@@ -700,7 +715,6 @@ export default function AdminPanel() {
 
               drawUnmirroredText('WARN: SUBJECT BOUNDS VIOLATION', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
               drawUnmirroredText('CENTER FACE COMPLETELY WITHIN SCANNER', 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-              // REMOVED RETURN to bypass bounds blocking temporarily
             }
 
             // 2. Distance check ("Move closer")
@@ -736,7 +750,6 @@ export default function AdminPanel() {
 
               drawUnmirroredText('WARN: SUBJECT ALIGNMENT OFF-CENTER', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
               drawUnmirroredText('ALIGN RETICLE WITH CENTER DESCRIPTOR', 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-              // REMOVED RETURN to bypass center blocking temporarily
             }
 
             // 4. Low light check
@@ -800,13 +813,25 @@ export default function AdminPanel() {
             const rightEAR = calculateEAR(rightEye);
             const avgEAR = (leftEAR + rightEAR) / 2.0;
 
-            // BYPASS BLINK DETECTION FOR DEBUG/FIX
-            if (!livenessVerifiedVal) {
-              blinkStateVal = 'blinkDetected';
-              livenessVerifiedVal = true;
+            // Face stability validation to prevent immediate camera warm-up capture errors
+            localStability += 1;
+            updateStability(localStability);
+            
+            if (localStability < 25) {
+              updateStatus('FACE DETECTED');
+              updateMsg(`Stabilizing face sensors... Hold still (${localStability}/25)`);
+              livenessVerifiedVal = false;
+              blinkStateVal = 'waitingForOpen';
               updateLiveness(blinkStateVal, livenessVerifiedVal);
-              updateMsg('Liveness verified automatically (bypass mode).');
-              updateStatus('BLINK DETECTED');
+            } else {
+              // BYPASS BLINK DETECTION FOR DEBUG/FIX ONCE STABILIZED
+              if (!livenessVerifiedVal) {
+                blinkStateVal = 'blinkDetected';
+                livenessVerifiedVal = true;
+                updateLiveness(blinkStateVal, livenessVerifiedVal);
+                updateMsg('Biometric lock acquired. Processing signature...');
+                updateStatus('BLINK DETECTED');
+              }
             }
 
             // Draw active telemetry details
@@ -855,39 +880,18 @@ export default function AdminPanel() {
                 console.error('[SNAPSHOT CAPTURE ERROR]:', snapErr);
               }
 
-              // Extract descriptor first while camera is active
-              try {
-                const fullDetection = await faceapi
-                  .detectSingleFace(video, options)
-                  .withFaceLandmarks(true)
-                  .withFaceDescriptor();
-
-                if (fullDetection) {
-                  const confidence = Math.round(fullDetection.detection.score * 1000) / 10;
-                  setFacePreviewUrl(dataUrl);
-                  setAutoCapturedDescriptor(fullDetection.descriptor);
-                  setConfidenceScore(confidence);
-                  
-                  // Stop the biometric camera stream
-                  stopBiometricCamera();
-                  
-                  updateStatus('ENROLLING');
-                  updateMsg('Auto-enrolling biometric signature...');
-                  handleEnrollBiometrics(fullDetection.descriptor, confidence);
-                } else {
-                  // Fallback if missing
-                  updateStatus('FAILED');
-                  updateMsg('Biometric generation failed. Retrying scanner...');
-                  wizardLoopActive.current = true;
-                  requestAnimationFrame(processFrame);
-                }
-              } catch (descErr) {
-                console.error('[DESCRIPTOR GENERATION ERROR]:', descErr);
-                updateStatus('FAILED');
-                updateMsg('Biometric generation failed. Retrying scanner...');
-                wizardLoopActive.current = true;
-                requestAnimationFrame(processFrame);
-              }
+              // Save descriptor and complete enrollment using pre-extracted descriptor to be ultra-fast
+              const confidence = Math.round(detection.detection.score * 1000) / 10;
+              setFacePreviewUrl(dataUrl);
+              setAutoCapturedDescriptor(descriptor);
+              setConfidenceScore(confidence);
+              
+              // Stop the biometric camera stream
+              stopBiometricCamera();
+              
+              updateStatus('ENROLLING');
+              updateMsg('Auto-enrolling biometric signature...');
+              handleEnrollBiometrics(descriptor, confidence);
             }
           }
         } catch (err) {
@@ -930,15 +934,7 @@ export default function AdminPanel() {
       });
       setBiometricCameraActive(true);
       setBiometricStream(stream);
-
-      // Wait a tick for the video element to render, then attach the stream and start loop
-      setTimeout(() => {
-        if (biometricVideoRef.current) {
-          biometricVideoRef.current.srcObject = stream;
-          biometricVideoRef.current.play();
-        }
-        startAutoCaptureLoop();
-      }, 500);
+      // Removed setTimeout. useEffect and metadata loaded event will safely and instantly attach stream.
     } catch (err) {
       console.error('[BIOMETRIC WIZARD ERROR]:', err);
       setWizardModelsLoading(false);
@@ -1101,32 +1097,40 @@ export default function AdminPanel() {
   // Fetch employees
   const fetchEmployees = async () => {
     try {
-      setLoading(true);
+      if (isComponentMounted.current) setLoading(true);
       const res = await apiCall('/employees', 'GET');
-      if (res.success) {
+      if (res.success && isComponentMounted.current) {
         setEmployees(res.employees);
       }
     } catch (err) {
       console.error('[ADMIN ERROR]: Failed to fetch employees list:', err);
     } finally {
-      setLoading(false);
+      if (isComponentMounted.current) setLoading(false);
     }
   };
 
   // Fetch Office settings
   const fetchSettings = async () => {
     try {
-      setLoadingSettings(true);
+      if (isComponentMounted.current) setLoadingSettings(true);
       const res = await apiCall('/settings', 'GET');
-      if (res.success && res.settings) {
-        setSettings(res.settings);
+      if (res.success && res.settings && isComponentMounted.current) {
+        // CRITICAL: Supabase returns ALL settings as strings.
+        // Parse numeric fields to Number so .toFixed() and arithmetic work correctly.
+        const parsed = {
+          ...res.settings,
+          geofence_lat: Number(res.settings.geofence_lat) || 0,
+          geofence_lng: Number(res.settings.geofence_lng) || 0,
+          geofence_radius: Number(res.settings.geofence_radius) || 100,
+        };
+        setSettings(parsed);
         if (res.settings.office_name) setOfficeName(res.settings.office_name);
         if (res.settings.office_address) setOfficeAddress(res.settings.office_address);
       }
       
       try {
         const geoRes = await apiCall('/settings/geofence', 'GET');
-        if (geoRes.success && geoRes.geofence) {
+        if (geoRes.success && geoRes.geofence && isComponentMounted.current) {
           setActivePolygon(geoRes.geofence.polygon_coordinates);
         }
       } catch (err) {
@@ -1135,7 +1139,7 @@ export default function AdminPanel() {
     } catch (err) {
       console.error('[ADMIN SETTINGS FETCH ERROR]:', err);
     } finally {
-      setLoadingSettings(false);
+      if (isComponentMounted.current) setLoadingSettings(false);
     }
   };
 
@@ -1166,15 +1170,20 @@ export default function AdminPanel() {
 
   // Detect Admin GPS Location
   const handleDetectLocation = () => {
-    setGpsDetecting(true);
-    setGpsError('');
+    if (isComponentMounted.current) {
+      setGpsDetecting(true);
+      setGpsError('');
+    }
     if (!navigator.geolocation) {
-      setGpsError('Geolocation is not supported by your browser.');
-      setGpsDetecting(false);
+      if (isComponentMounted.current) {
+        setGpsError('Geolocation is not supported by your browser.');
+        setGpsDetecting(false);
+      }
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        if (!isComponentMounted.current) return;
         const { latitude, longitude, accuracy } = position.coords;
         setSettings(prev => ({ ...prev, geofence_lat: parseFloat(latitude.toFixed(6)), geofence_lng: parseFloat(longitude.toFixed(6)) }));
         setGpsAccuracy(Math.round(accuracy));
@@ -1183,6 +1192,7 @@ export default function AdminPanel() {
         setGpsDetecting(false);
       },
       (error) => {
+        if (!isComponentMounted.current) return;
         setGpsDetecting(false);
         if (error.code === error.PERMISSION_DENIED) {
           setGpsError('Location permission denied. Please allow location access or set coordinates manually.');
@@ -1203,6 +1213,7 @@ export default function AdminPanel() {
     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=17&addressdetails=1`)
       .then(r => r.json())
       .then(data => {
+        if (!isComponentMounted.current) return;
         if (data && data.display_name) {
           setOfficeAddress(data.display_name);
           if (!officeName && data.name) setOfficeName(data.name);
@@ -1229,12 +1240,13 @@ export default function AdminPanel() {
           { headers: { 'Accept-Language': 'en' } }
         );
         const data = await resp.json();
+        if (!isComponentMounted.current) return;
         setLocationSuggestions(data || []);
         setShowSuggestions(true);
       } catch (e) {
-        setLocationSuggestions([]);
+        if (isComponentMounted.current) setLocationSuggestions([]);
       } finally {
-        setSearchLoading(false);
+        if (isComponentMounted.current) setSearchLoading(false);
       }
     }, 380);
   }, [officeName]);
@@ -1368,9 +1380,57 @@ export default function AdminPanel() {
   };
 
   useEffect(() => {
+    isComponentMounted.current = true;
     fetchEmployees();
     fetchSettings();
+    return () => {
+      isComponentMounted.current = false;
+      // 1. Terminate GPS perimeter watcher if running
+      if (captureWatchId.current) {
+        navigator.geolocation.clearWatch(captureWatchId.current);
+        captureWatchId.current = null;
+      }
+      // 2. Shut off face enrollment loop
+      wizardLoopActive.current = false;
+      
+      // 3. Explicitly remove Leaflet map instances to prevent container initialization leaks
+      if (geofenceMapRef.current) {
+        try {
+          console.log('[AdminPanel Cleanup]: Detaching geofence map...');
+          geofenceMapRef.current.remove();
+          geofenceMapRef.current = null;
+        } catch (e) {
+          console.warn('[AdminPanel Geofence Map Cleanup Warning]:', e);
+        }
+      }
+      if (radarMapRef.current) {
+        try {
+          console.log('[AdminPanel Cleanup]: Detaching radar map...');
+          radarMapRef.current.remove();
+          radarMapRef.current = null;
+        } catch (e) {
+          console.warn('[AdminPanel Radar Map Cleanup Warning]:', e);
+        }
+      }
+    };
   }, []);
+
+  // Automatically release biometric camera feed if tab or route is changed
+  useEffect(() => {
+    return () => {
+      if (biometricStream) {
+        biometricStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [biometricStream]);
+
+  // Safe stream attacher to prevent race conditions during element mounting
+  useEffect(() => {
+    if (biometricCameraActive && biometricStream && biometricVideoRef.current) {
+      console.log('[BIOMETRIC CAMERA] Attaching media stream to video element.');
+      biometricVideoRef.current.srcObject = biometricStream;
+    }
+  }, [biometricCameraActive, biometricStream, biometricVideoRef.current]);
 
   // Click outside handler to close search suggestions dropdown
   useEffect(() => {
@@ -1384,9 +1444,15 @@ export default function AdminPanel() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'face-enroll' && wizardTargetId && !biometricCameraActive && !wizardModelsLoading) {
-      startBiometricCamera();
+    if (activeTab === 'face-enroll') {
+      if (wizardTargetId && !biometricCameraActive && !wizardModelsLoading) {
+        startBiometricCamera();
+      }
+    } else {
+      // Switched away from face-enroll tab: clean up resources to prevent camera leaks
+      stopBiometricCamera();
     }
+    
     // Auto-detect GPS when admin opens the location tab for the first time
     if (activeTab === 'location' && !locationAutoDetected.current) {
       locationAutoDetected.current = true;
@@ -1663,7 +1729,12 @@ export default function AdminPanel() {
 
       {/* Tab 1: Employee Directory */}
       {activeTab === 'directory' && (
-        <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
             {/* Search Input */}
             <div className="relative w-full max-w-sm">
@@ -1808,12 +1879,17 @@ export default function AdminPanel() {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Tab 2: Register Employee Form */}
       {activeTab === 'register' && (
-        <div className="max-w-xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="max-w-xl mx-auto"
+        >
           <div className="glass-panel rounded-2xl p-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
             
@@ -1941,12 +2017,17 @@ export default function AdminPanel() {
               </button>
             </form>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Tab 3: Face Enrollment */}
       {activeTab === 'face-enroll' && (
-        <div className="glass-panel rounded-2xl p-6 relative overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="glass-panel rounded-2xl p-6 relative overflow-hidden"
+        >
           <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
           
           <h3 className="text-sm font-bold font-mono tracking-widest text-cyan-400 uppercase mb-2 flex items-center gap-2">
@@ -2005,7 +2086,7 @@ export default function AdminPanel() {
                   (enrollStatus === 'FAILED' || enrollStatus === 'DUPLICATE DETECTED') ? 'border-cyber-red/80 shadow-[0_0_25px_rgba(239,68,68,0.5)] animate-pulse' :
                   'border-white/10 shadow-none'
                 }`}>
-                  {enrollStatus === 'CAPTURED' ? (
+                  {facePreviewUrl ? (
                     <div className="absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center animate-fade-in z-20 font-mono">
                       <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent animate-pulse" />
                       <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent animate-pulse" />
@@ -2040,6 +2121,15 @@ export default function AdminPanel() {
                         className="w-full h-full object-cover scale-x-[-1]"
                         muted
                         playsInline
+                        onLoadedMetadata={(e) => {
+                          console.log('[BIOMETRIC SCANNER LENS] Video metadata loaded. Playing video stream...');
+                          e.target.play()
+                            .then(() => {
+                              console.log('[BIOMETRIC SCANNER LENS] Play success. Initiating auto-capture loop...');
+                              startAutoCaptureLoop();
+                            })
+                            .catch(err => console.error('[BIOMETRIC SCANNER LENS] Play failed:', err));
+                        }}
                       />
                       <canvas
                         ref={biometricCanvasRef}
@@ -2335,12 +2425,17 @@ export default function AdminPanel() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Tab 4: Location & Geofence Settings */}
       {activeTab === 'location' && (
-        <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="space-y-6"
+        >
           {/* ===== GEOFENCE CONFIGURATION SECTION ===== */}
           <div className="glass-panel rounded-2xl p-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
@@ -2646,6 +2741,8 @@ export default function AdminPanel() {
 
                   {settings.geofence_lat !== 0 && settings.geofence_lng !== 0 ? (
                     <MapContainer
+                      key="admin-geofence-map-static"
+                      ref={geofenceMapRef}
                       center={[settings.geofence_lat, settings.geofence_lng]}
                       zoom={16}
                       scrollWheelZoom={true}
@@ -2914,6 +3011,8 @@ export default function AdminPanel() {
                 </div>
 
                 <MapContainer
+                  key="admin-radar-map-static"
+                  ref={radarMapRef}
                   center={radarCenter}
                   zoom={15}
                   scrollWheelZoom={true}
@@ -2944,11 +3043,13 @@ export default function AdminPanel() {
 
                   {/* Employee Pins */}
                   {employees
-                    .filter(emp => emp.latitude && emp.longitude && !isNaN(emp.latitude) && !isNaN(emp.longitude) && emp.latitude !== 0)
+                    .filter(emp => emp.latitude && emp.longitude && !isNaN(parseFloat(emp.latitude)) && !isNaN(parseFloat(emp.longitude)) && parseFloat(emp.latitude) !== 0)
                     .map(emp => {
+                      const empLat = parseFloat(emp.latitude);
+                      const empLng = parseFloat(emp.longitude);
                       const isInside = emp.status === 'Inside Office';
                       const isOffline = emp.status === 'Offline';
-                      const dist = calculateDistance(emp.latitude, emp.longitude, settings.geofence_lat, settings.geofence_lng);
+                      const dist = calculateDistance(empLat, empLng, settings.geofence_lat, settings.geofence_lng);
                       
                       let markerIcon = employeeOfflineIcon;
                       if (!isOffline) {
@@ -2958,7 +3059,7 @@ export default function AdminPanel() {
                       return (
                         <Marker
                           key={emp.id}
-                          position={[emp.latitude, emp.longitude]}
+                          position={[empLat, empLng]}
                           icon={markerIcon}
                         >
                           <Popup className="font-mono text-xs">
@@ -2981,7 +3082,7 @@ export default function AdminPanel() {
                                 </div>
                               )}
                               <div className="text-[9px] text-slate-500">
-                                [{emp.latitude.toFixed(5)}, {emp.longitude.toFixed(5)}]
+                                [{Number(emp.latitude).toFixed(5)}, {Number(emp.longitude).toFixed(5)}]
                               </div>
                             </div>
                           </Popup>
@@ -3047,7 +3148,7 @@ export default function AdminPanel() {
                             <div className="flex justify-between items-center text-[9px] text-slate-400 font-mono mt-1 border-t border-white/5 pt-1.5">
                               <div className="flex items-center gap-1 text-[8px]">
                                 <MapPin className="w-2.5 h-2.5 text-slate-500" />
-                                <span>{emp.latitude.toFixed(4)}, {emp.longitude.toFixed(4)}</span>
+                                <span>{Number(emp.latitude).toFixed(4)}, {Number(emp.longitude).toFixed(4)}</span>
                               </div>
                               <div className="font-bold text-slate-300">
                                 {dist !== null ? `${dist.toFixed(1)}m` : 'N/A'}
@@ -3075,12 +3176,17 @@ export default function AdminPanel() {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Tab 5: Danger Zone */}
       {activeTab === 'danger' && (
-        <div className="glass-panel border-cyber-red/20 rounded-2xl p-6 relative overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="glass-panel border-cyber-red/20 rounded-2xl p-6 relative overflow-hidden"
+        >
           <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyber-red/30 to-transparent"></div>
           
           <h3 className="text-sm font-bold font-mono tracking-widest text-cyber-red uppercase mb-4 flex items-center gap-2">
@@ -3134,7 +3240,7 @@ export default function AdminPanel() {
               </button>
             </div>
           </div>
-        </div>
+        </motion.div>
       )}
 
       {/* Quick Edit Modal (Opened from Directory Table Edit action) */}

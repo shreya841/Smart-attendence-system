@@ -5,6 +5,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import AuthLayout from '../layouts/AuthLayout.jsx';
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
 import ProtectedRoute from './ProtectedRoute.jsx';
+import ErrorBoundary from '../context/ErrorBoundary.jsx';
 
 // Views
 import Login from '../views/Login.jsx';
@@ -28,15 +29,33 @@ export default function AppRoutes() {
           <DashboardLayout />
         </ProtectedRoute>
       }>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/scanner" element={<BiometricScanner />} />
-        <Route path="/sandbox" element={<GeofenceSandbox />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/dashboard" element={
+          <ErrorBoundary>
+            <Dashboard />
+          </ErrorBoundary>
+        } />
+        <Route path="/scanner" element={
+          <ErrorBoundary>
+            <BiometricScanner />
+          </ErrorBoundary>
+        } />
+        <Route path="/sandbox" element={
+          <ErrorBoundary>
+            <GeofenceSandbox />
+          </ErrorBoundary>
+        } />
+        <Route path="/profile" element={
+          <ErrorBoundary>
+            <Profile />
+          </ErrorBoundary>
+        } />
         
         {/* Admin Restricted Paths */}
         <Route path="/admin" element={
           <ProtectedRoute allowedRoles={['admin']}>
-            <AdminPanel />
+            <ErrorBoundary>
+              <AdminPanel />
+            </ErrorBoundary>
           </ProtectedRoute>
         } />
       </Route>
