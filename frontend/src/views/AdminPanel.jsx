@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { apiCall } from '../services/api.js';
 import { 
   Users, 
@@ -134,6 +135,11 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 };
 
 export default function AdminPanel() {
+  const { theme } = useTheme();
+  const mapTileUrl = theme === 'dark' 
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
   const [activeTab, setActiveTab] = useState('directory'); // 'directory' | 'register' | 'face-enroll' | 'location' | 'danger'
   const [employees, setEmployees] = useState([]);
   const [search, setSearch] = useState('');
@@ -2751,8 +2757,8 @@ export default function AdminPanel() {
                     >
                       <ChangeMapView center={geofenceMapCenter} zoom={geofenceMapZoom} />
                       <TileLayer
-                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                        url={mapTileUrl}
                       />
                       <MapClickHandler onMapClick={handleGeofenceMapClick} />
 
@@ -3020,8 +3026,8 @@ export default function AdminPanel() {
                 >
                   <ChangeMapView center={radarCenter} />
                   <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                    url={mapTileUrl}
                   />
                   {/* Geofence boundaries */}
                   <Circle

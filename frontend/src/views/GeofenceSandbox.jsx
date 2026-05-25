@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { apiCall } from '../services/api.js';
 import { MapContainer, TileLayer, Circle, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -46,6 +47,11 @@ const employeeIcon = new L.Icon({
 
 export default function GeofenceSandbox() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  
+  const mapTileUrl = theme === 'dark'
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   
   // Dynamic settings state
   const [loadingSettings, setLoadingSettings] = useState(true);
@@ -207,7 +213,7 @@ export default function GeofenceSandbox() {
                 {/* Modern Cyber Dark Map Tiles */}
                 <TileLayer
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  url={mapTileUrl}
                 />
 
                 {/* Glowing Neon Geofence Circle Boundary */}

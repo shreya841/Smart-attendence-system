@@ -2,58 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+/* CSS Theme Variables Design System */
+:root {
+  --bg-primary: #030712;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --bg-gradient: radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.04) 0px, transparent 50%),
+                 radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
+                 radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.03) 0px, transparent 65%);
+  --glass-bg: rgba(9, 13, 26, 0.45);
+  --glass-bg-heavy: rgba(7, 10, 21, 0.75);
+  --glass-card: rgba(17, 24, 39, 0.3);
+  --glass-card-hover: rgba(17, 24, 39, 0.45);
+  --glass-border: rgba(255, 255, 255, 0.04);
+  --glass-border-heavy: rgba(255, 255, 255, 0.06);
+  --glass-border-hover: rgba(6, 182, 212, 0.18);
+  --glass-input-bg: rgba(2, 6, 23, 0.45);
+  --glass-input-border: rgba(255, 255, 255, 0.05);
+  --glass-input-text: #ffffff;
+  --btn-secondary-bg: rgba(15, 23, 42, 0.6);
+  --btn-secondary-border: rgba(255, 255, 255, 0.05);
+  --btn-secondary-text: #94a3b8;
+  
+  --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35);
+  --panel-shadow-heavy: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+  
+  --logo-text: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.05);
+  --sidebar-footer-bg: rgba(2, 6, 23, 0.2);
+  --header-bg: rgba(9, 13, 22, 0.3);
+  --cyber-grid-color: rgba(6, 182, 212, 0.025);
+  --map-bg: #070a13;
+  --leaflet-popup-bg: rgba(9, 13, 26, 0.95);
+  --leaflet-popup-text: #cbd5e1;
+  --text-white-force: #ffffff;
+}
+
+.light-theme {
+  --bg-primary: #f8fafc;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --bg-gradient: radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+                 radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.06) 0px, transparent 50%),
+                 radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.04) 0px, transparent 65%);
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-heavy: rgba(255, 255, 255, 0.85);
+  --glass-card: rgba(241, 245, 249, 0.5);
+  --glass-card-hover: rgba(241, 245, 249, 0.8);
+  --glass-border: rgba(15, 23, 42, 0.08);
+  --glass-border-heavy: rgba(15, 23, 42, 0.12);
+  --glass-border-hover: rgba(6, 182, 212, 0.35);
+  --glass-input-bg: rgba(255, 255, 255, 0.75);
+  --glass-input-border: rgba(15, 23, 42, 0.1);
+  --glass-input-text: #0f172a;
+  --btn-secondary-bg: rgba(241, 245, 249, 0.8);
+  --btn-secondary-border: rgba(15, 23, 42, 0.08);
+  --btn-secondary-text: #475569;
+  
+  --panel-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
+  --panel-shadow-heavy: 0 12px 40px 0 rgba(15, 23, 42, 0.1);
+  
+  --logo-text: #0f172a;
+  --sidebar-border: rgba(15, 23, 42, 0.08);
+  --sidebar-footer-bg: rgba(241, 245, 249, 0.4);
+  --header-bg: rgba(255, 255, 255, 0.45);
+  --cyber-grid-color: rgba(6, 182, 212, 0.04);
+  --map-bg: #f1f5f9;
+  --leaflet-popup-bg: rgba(255, 255, 255, 0.95);
+  --leaflet-popup-text: #0f172a;
+  --text-white-force: #0f172a;
+}
+
 @layer base {
   body {
-    @apply bg-[#030712] text-slate-200 overflow-x-hidden font-sans;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.04) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.05) 0px, transparent 50%),
-      radial-gradient(at 50% 50%, rgba(59, 130, 246, 0.03) 0px, transparent 65%);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    background-image: var(--bg-gradient);
     background-attachment: fixed;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    @apply overflow-x-hidden font-sans;
   }
 }
 
 /* Glassmorphism Design System */
 .glass-panel {
-  background: rgba(9, 13, 26, 0.45);
+  background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
   box-shadow: 
-    0 8px 32px 0 rgba(0, 0, 0, 0.35),
+    var(--panel-shadow),
     inset 0 1px 1px 0 rgba(255, 255, 255, 0.02);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-panel-heavy {
-  background: rgba(7, 10, 21, 0.75);
+  background: var(--glass-bg-heavy);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--glass-border-heavy);
   box-shadow: 
-    0 12px 40px 0 rgba(0, 0, 0, 0.5),
+    var(--panel-shadow-heavy),
     inset 0 1px 2px 0 rgba(255, 255, 255, 0.04);
+  transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .glass-card {
-  background: rgba(17, 24, 39, 0.3);
+  background: var(--glass-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-card:hover {
-  background: rgba(17, 24, 39, 0.45);
-  border-color: rgba(6, 182, 212, 0.15);
+  background: var(--glass-card-hover);
+  border-color: var(--glass-border-hover);
   box-shadow: 
-    0 10px 30px 0 rgba(0, 0, 0, 0.4),
+    var(--panel-shadow-heavy),
     0 0 15px 0 rgba(6, 182, 212, 0.05);
   transform: translateY(-2px);
 }
 
 /* Form Inputs */
 .glass-input {
-  @apply bg-slate-950/45 border border-white/5 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan/30 transition-all duration-200 backdrop-blur-md text-xs font-mono;
+  background: var(--glass-input-bg);
+  border: 1px solid var(--glass-input-border);
+  color: var(--glass-input-text);
+  @apply rounded-xl px-4 py-2.5 placeholder-slate-500 focus:outline-none focus:border-cyber-cyan focus:ring-1 focus:ring-cyber-cyan/30 transition-all duration-200 backdrop-blur-md text-xs font-mono;
 }
 
 /* Premium Buttons */
@@ -65,7 +143,7 @@
   background: linear-gradient(135deg, rgba(6, 182, 212, 0.95) 0%, rgba(59, 130, 246, 0.95) 100%);
   border: 1px solid rgba(6, 182, 212, 0.25);
   box-shadow: 0 4px 14px 0 rgba(6, 182, 212, 0.15);
-  color: #030712;
+  color: #030712 !important;
 }
 
 .btn-primary:hover {
@@ -77,14 +155,23 @@
 }
 
 .btn-secondary {
-  @apply bg-slate-900/60 border border-white/5 text-slate-400 hover:text-white hover:bg-slate-900 hover:border-white/10;
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  color: var(--btn-secondary-text);
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--glass-card-hover);
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
 }
 
 /* Cyber overlays */
 .cyber-grid {
   background-image: 
-    linear-gradient(rgba(6, 182, 212, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(6, 182, 212, 0.025) 1px, transparent 1px);
+    linear-gradient(var(--cyber-grid-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--cyber-grid-color) 1px, transparent 1px);
   background-size: 24px 24px;
   background-position: center;
 }
@@ -96,7 +183,8 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(3, 7, 18, 0.8);
+  background: var(--bg-primary);
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -147,42 +235,46 @@
 
 /* Leaflet map overrides */
 .leaflet-container {
-  background: #070a13 !important;
+  background: var(--map-bg) !important;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border) !important;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .leaflet-bar {
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid var(--glass-border) !important;
   box-shadow: none !important;
 }
 
 .leaflet-bar a {
-  background-color: rgba(9, 13, 26, 0.85) !important;
-  color: #94a3b8 !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background-color: var(--glass-bg-heavy) !important;
+  color: var(--text-secondary) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  transition: all 0.2s ease;
 }
 
 .leaflet-bar a:hover {
   background-color: rgba(6, 182, 212, 0.15) !important;
-  color: #fff !important;
+  color: var(--text-primary) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: rgba(9, 13, 26, 0.95) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  background: var(--leaflet-popup-bg) !important;
+  border: 1px solid var(--glass-border-heavy) !important;
+  box-shadow: var(--panel-shadow-heavy) !important;
   border-radius: 12px !important;
-  color: #cbd5e1 !important;
+  color: var(--leaflet-popup-text) !important;
   backdrop-filter: blur(12px);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .leaflet-popup-tip {
-  background: rgba(9, 13, 26, 0.95) !important;
+  background: var(--leaflet-popup-bg) !important;
+  transition: background 0.3s ease;
 }
 
 .leaflet-popup-close-button {
-  color: #64748b !important;
+  color: var(--text-muted) !important;
 }
 
 /* Animations */
@@ -265,4 +357,50 @@ input[type='range']::-webkit-slider-thumb {
 input[type='range']::-webkit-slider-thumb:hover {
   transform: scale(1.25);
   box-shadow: 0 0 12px rgba(6, 182, 212, 0.6);
+}
+
+/* Adaptive Light Theme Text Utilities overrides to ensure Tailwind text classes adapt perfectly */
+.light-theme .text-white:not(button):not(button *):not(.force-white) {
+  color: #0f172a !important;
+}
+.light-theme .text-slate-200:not(.force-white),
+.light-theme .text-slate-300:not(.force-white),
+.light-theme .text-slate-350:not(.force-white) {
+  color: #1e293b !important;
+}
+.light-theme .text-slate-400:not(.force-white),
+.light-theme .text-slate-450:not(.force-white) {
+  color: #475569 !important;
+}
+.light-theme .text-slate-500:not(.force-white) {
+  color: #64748b !important;
+}
+.light-theme .text-slate-100:not(.force-white) {
+  color: #0f172a !important;
+}
+
+/* Sidebar Custom Override */
+.light-theme aside {
+  background: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+.light-theme aside h1 {
+  color: #0f172a !important;
+}
+.light-theme aside .text-white {
+  color: #0f172a !important;
+}
+
+/* Header Override */
+.light-theme header {
+  background: rgba(255, 255, 255, 0.65) !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+.light-theme header h2 {
+  color: #0f172a !important;
+}
+
+/* Additional specific view patches for premium aesthetics */
+.light-theme .glass-panel {
+  box-shadow: var(--panel-shadow) !important;
 }

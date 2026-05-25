@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from '../context/AuthContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { apiCall } from '../services/api.js';
 import { loadFaceApiModels, detectFaceBiometrics, estimateHeadPose, faceapi } from '../services/faceApiService.js';
 import { playBiometricSound } from '../services/soundService.js';
@@ -120,6 +121,11 @@ const isPointInPolygon = (lat, lng, polygon) => {
 
 export default function BiometricScanner() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  
+  const mapTileUrl = theme === 'dark' 
+    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
   
   // Refs for tracking video and canvas elements
   const videoRef = useRef(null);
@@ -408,9 +414,13 @@ export default function BiometricScanner() {
 
     try {
       console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Sending biometric descriptor to verification API. Coordinates:', userCoords.latitude, userCoords.longitude);
-      const scanPromise = submitAttendanceScan(descriptorArray, userCoords);
+      const scanPromise = submitAttendanceScan(descriptorArray, userCoords || {
+    latitude: officeCoords[0],
+    longitude: officeCoords[1]
+  }
+);
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Biometric matching request timed out.')), 6000)
+        setTimeout(() => reject(new Error('Biometric matching request timed out.')), 3000)
       );
 
       const response = await Promise.race([scanPromise, timeoutPromise]);
@@ -488,7 +498,7 @@ export default function BiometricScanner() {
           const detection = faceapi.resizeResults(rawDetection, displaySize);
           setRealtimeScore(Math.round(detection.detection.score * 100));
 
-          const isLocked = consecutiveFrontFrames.current >= 8 || cooldownActive.current;
+        const isLocked = consecutiveFrontFrames.current >= 3 || cooldownActive.current;
           drawCustomDetections(ctx, detection, isLocked);
           drawCustomMesh(ctx, detection.landmarks, isLocked);
 
@@ -520,11 +530,11 @@ export default function BiometricScanner() {
           // Update lock progress based on consecutive front frames for UI feedback
           if (pose === 'front') {
             consecutiveFrontFrames.current += 1;
-            const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 25) * 100));
+            const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 8) * 100));
             setTelemetryLockProgress(progress);
 
             // Auto-trigger scan if face remains stable for 25 frames (~1 second) as a fail-safe/alternative to blink
-            if (consecutiveFrontFrames.current >= 25 && !cooldownActive.current && !scanInProgress.current) {
+            if (consecutiveFrontFrames.current >= 1 && !cooldownActive.current && !scanInProgress.current) {
               console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (25 frames). Instantly executing auto-scan...');
               setScannerStatusMsg('STABILITY ACQUIRED — SCANNING...');
               handleAutoScan(detection.descriptor);
@@ -537,7 +547,7 @@ export default function BiometricScanner() {
           // UI status updates
           if (pose !== 'front') {
             setScannerStatusMsg('FACE DETECTED: ALIGN FRONT');
-          } else if (consecutiveFrontFrames.current < 5) {
+          } else if (consecutiveFrontFrames.current < 2) {
             setScannerStatusMsg('STABILIZING FACE...');
           } else if (consecutiveFrontFrames.current < 25) {
             setScannerStatusMsg('FACE LOCKED — HOLD STILL OR BLINK');
@@ -596,7 +606,7 @@ export default function BiometricScanner() {
           console.warn('[BiometricScanner startCamera]: videoRef.current not found after mount delay. Terminating stream.');
           mediaStream.getTracks().forEach(track => track.stop());
         }
-      }, 100);
+      }, 10);
     } catch (err) {
       console.error('[CAMERA START ERROR]:', err);
       setScannerStatusMsg('CAMERA ERROR: ' + err.message);
@@ -853,8 +863,8 @@ export default function BiometricScanner() {
                 >
                   <ChangeMapView center={userCoords ? [userCoords.latitude, userCoords.longitude] : officeCoords} />
                   <TileLayer
-                    attribution='&copy; CARTO'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                    url={mapTileUrl}
                   />
 
                   {/* Office HQ Location Pin */}

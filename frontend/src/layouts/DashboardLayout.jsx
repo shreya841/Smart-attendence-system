@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { SocketProvider, useSocket } from '../context/SocketContext.jsx';
+import { useTheme } from '../context/ThemeContext.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShieldAlert, 
@@ -21,12 +22,15 @@ import {
   ChevronRight,
   ShieldCheck,
   User,
-  Compass
+  Compass,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 function DashboardLayoutInner() {
   const { user, logout, loading } = useAuth();
   const { connected, socket } = useSocket();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -103,7 +107,7 @@ function DashboardLayoutInner() {
   const currentRouteName = menuItems.find(item => item.path === location.pathname)?.name || 'Operational Center';
 
   return (
-    <div className="min-h-screen flex bg-[#030712] relative overflow-hidden">
+    <div className="min-h-screen flex bg-transparent relative overflow-hidden">
       {/* Background Ambient Glows */}
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-gradient-to-tr from-cyber-cyan/5 to-transparent rounded-full filter blur-[150px] pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-cyber-blue/5 to-transparent rounded-full filter blur-[150px] pointer-events-none"></div>
@@ -301,6 +305,15 @@ function DashboardLayoutInner() {
                 </>
               )}
             </div>
+
+            {/* Theme Toggle */}
+            <button 
+              onClick={toggleTheme}
+              className="p-2 rounded-xl border border-white/5 hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition-all text-slate-400 hover:text-white cursor-pointer flex items-center justify-center"
+              title={theme === 'dark' ? "Activate Light Mode" : "Activate Dark Mode"}
+            >
+              {theme === 'dark' ? <Sun className="w-4.5 h-4.5 text-cyber-cyan text-glow-cyan" /> : <Moon className="w-4.5 h-4.5 text-cyber-cyan" />}
+            </button>
 
             {/* Notification Bell */}
             <div className="relative">
