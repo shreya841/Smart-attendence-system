@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { SocketProvider, useSocket } from '../context/SocketContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, LayoutDashboard, ScanFace, MapPin, UserSquare2, Users2, LogOut, Wifi, WifiOff, Bell, Menu, X, Radio, ChevronLeft, ChevronRight, Sun, Moon, ShieldAlert } from 'lucide-react';
+import { ShieldCheck, LayoutDashboard, ScanFace, MapPin, UserSquare2, Users2, LogOut, Wifi, WifiOff, Bell, Menu, X, Radio, ChevronLeft, ChevronRight, Sun, Moon, ShieldAlert, Calendar, Home, FileText } from 'lucide-react';
 
 function DashboardLayoutInner() {
   const { user, logout, loading } = useAuth();
@@ -18,26 +18,42 @@ function DashboardLayoutInner() {
   const [isCollapsed, setIsCollapsed] = useState(() => localStorage.getItem('quantum_sidebar_collapsed') === 'true');
 
   const menuItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin', 'employee'], accent: '#4F46E5' },
-    { name: 'Biometric Scanner', path: '/scanner', icon: ScanFace, roles: ['admin', 'employee'], accent: '#06B6D4' },
-    { name: 'Geofence Sandbox', path: '/sandbox', icon: MapPin, roles: ['admin', 'employee'], accent: '#10B981' },
+    // Admin Items
+    { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, roles: ['admin'], accent: '#4F46E5' },
+    { name: 'Scanner', path: '/scanner', icon: ScanFace, roles: ['admin'], accent: '#06B6D4' },
+    { name: 'Geofence', path: '/sandbox', icon: MapPin, roles: ['admin'], accent: '#10B981' },
     { name: 'Admin Control', path: '/admin', icon: Users2, roles: ['admin'], accent: '#EC4899' },
-    { name: 'My Profile', path: '/profile', icon: UserSquare2, roles: ['admin', 'employee'], accent: '#F59E0B' },
+    { name: 'Reports', path: '/dashboard', icon: FileText, roles: ['admin'], accent: '#8B5CF6' },
+    { name: 'Profile', path: '/profile', icon: UserSquare2, roles: ['admin'], accent: '#F59E0B' },
+
+    // Employee Items
+    { name: 'Scanner', path: '/scanner', icon: ScanFace, roles: ['employee'], accent: '#06B6D4' },
+    { name: 'My Attendance', path: '/my-attendance', icon: Calendar, roles: ['employee'], accent: '#8B5CF6' },
+    { name: 'My Profile', path: '/profile', icon: UserSquare2, roles: ['employee'], accent: '#F59E0B' },
   ];
   const allowedMenuItems = menuItems.filter(item => item.roles.includes(user?.role));
   const currentRouteName = menuItems.find(item => item.path === location.pathname)?.name || 'Workspace';
 
   useEffect(() => {
     if (!socket) return;
-    const handleNewLog = (data) => setAlerts(prev => ([{ id: Date.now(), title: `Activity: ${data.event_type}`, message: `${data.name || 'Unknown'} - ${data.details?.status_text || 'Boundary trigger'}`, type: 'info', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...prev]).slice(0, 10));
-    const handleUnauthorized = () => setAlerts(prev => ([{ id: Date.now(), title: 'Security alert', message: 'Unauthorized face scan detected.', type: 'danger', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...prev]).slice(0, 10));
+    const isAdmin = user?.role === 'admin';
+    const handleNewLog = (data) => {
+      // Employees only see their own activity in the notification feed
+      if (!isAdmin && data.employee_id !== user?.id) return;
+      setAlerts(prev => ([{ id: Date.now(), title: `Activity: ${data.event_type}`, message: `${data.name || 'Unknown'} - ${data.details?.status_text || 'Boundary trigger'}`, type: 'info', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...prev]).slice(0, 10));
+    };
+    const handleUnauthorized = () => {
+      // Security alerts are admin-only
+      if (!isAdmin) return;
+      setAlerts(prev => ([{ id: Date.now(), title: 'Security alert', message: 'Unauthorized face scan detected.', type: 'danger', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }, ...prev]).slice(0, 10));
+    };
     socket.on('logs:new', handleNewLog);
     socket.on('unauthorized:alert', handleUnauthorized);
     return () => {
       socket.off('logs:new', handleNewLog);
       socket.off('unauthorized:alert', handleUnauthorized);
     };
-  }, [socket]);
+  }, [socket, user]);
 
   if (loading) return null;
 

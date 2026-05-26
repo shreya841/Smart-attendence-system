@@ -75,6 +75,41 @@ router.post('/clear', requireAuth, requireAdmin, async (req, res, next) => {
   }
 });
 
+// @route   GET /api/attendance/my-history
+// @desc    Get the authenticated user's own attendance records (privacy-safe)
+router.get('/my-history', requireAuth, async (req, res, next) => {
+  const db = getDb();
+  const employeeId = req.user.id;
+
+  try {
+    const isSupabaseLive = await checkSupabaseConnection();
+    let history = [];
+
+    if (isSupabaseLive) {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*')
+        .eq('employee_id', employeeId)
+        .order('date', { ascending: false });
+      if (!error && data && data.length > 0) {
+        history = data;
+      }
+    }
+
+    if (history.length === 0) {
+      history = await db.all(`
+        SELECT * FROM attendance
+        WHERE employee_id = ?
+        ORDER BY date DESC
+      `, [employeeId]);
+    }
+
+    res.json({ success: true, history });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // @route   GET /api/attendance/history/:employeeId
 // @desc    Get attendance records for a specific employee
 router.get('/history/:employeeId', requireAuth, async (req, res, next) => {

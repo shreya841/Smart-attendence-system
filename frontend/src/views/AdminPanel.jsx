@@ -134,6 +134,9 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return R * c; // distance in meters
 };
 
+const generateUniqueId = () => 'EMP-' + Math.floor(100 + Math.random() * 900);
+const generatePassword = () => 'emp@' + Math.floor(1000 + Math.random() * 9000);
+
 export default function AdminPanel() {
   const { theme } = useTheme();
   const mapTileUrl = theme === 'dark' 
@@ -208,17 +211,17 @@ export default function AdminPanel() {
 
   // Form State
   const [form, setForm] = useState({
-    id: '',
+    id: generateUniqueId(),
     name: '',
     email: '',
-    password: '',
+    password: generatePassword(),
     role: 'employee',
     department: 'Engineering'
   });
   
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [autoRegisterFace, setAutoRegisterFace] = useState(false);
+  const [autoRegisterFace, setAutoRegisterFace] = useState(true);
   const [enrollError, setEnrollError] = useState('');
   const [enrollSuccess, setEnrollSuccess] = useState('');
   const [faceSource, setFaceSource] = useState('self');
@@ -719,130 +722,26 @@ export default function AdminPanel() {
             // Draw sci-fi holographic landmarks overlay
             drawHolographicOverlay(ctx, detection, videoWidth, videoHeight, livenessVerifiedVal, blinkStateVal);
 
-            // --- Quality Validations ---
-            // 1. Boundary check
-            if (box.x < 0 || box.y < 0 || box.x + box.width > videoWidth || box.y + box.height > videoHeight) {
-              updateStatus('FACE DETECTED');
-              updateMsg('Face partially hidden / out of frame');
-              localStability = 0;
-              updateStability(0);
-
-              blinkStateVal = 'waitingForOpen';
-              livenessVerifiedVal = false;
-              updateLiveness(blinkStateVal, livenessVerifiedVal);
-
-              drawUnmirroredText('WARN: SUBJECT BOUNDS VIOLATION', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
-              drawUnmirroredText('CENTER FACE COMPLETELY WITHIN SCANNER', 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-            }
-
-            // 2. Distance check ("Move closer")
-            if (box.width < videoWidth * 0.28) {
-              updateStatus('FACE DETECTED');
-              updateMsg('Move closer to the camera');
-              localStability = 0;
-              updateStability(0);
-
-              blinkStateVal = 'waitingForOpen';
-              livenessVerifiedVal = false;
-              updateLiveness(blinkStateVal, livenessVerifiedVal);
-
-              drawUnmirroredText('WARN: SUBJECT DISTANCE OUT OF RANGE', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
-              drawUnmirroredText('MOVE CLOSER TO SENSOR BEAM', 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-              return;
-            }
-
-            // 3. Centeredness check ("Center your face")
-            const boxCenterX = box.x + box.width / 2;
-            const boxCenterY = box.y + box.height / 2;
-            const centerThresholdX = videoWidth * 0.3; // Relieved threshold from 0.12 to 0.3
-            const centerThresholdY = videoHeight * 0.3; // Relieved threshold from 0.15 to 0.3
-            if (Math.abs(boxCenterX - videoWidth / 2) > centerThresholdX || Math.abs(boxCenterY - videoHeight / 2) > centerThresholdY) {
-              updateStatus('FACE DETECTED');
-              updateMsg('Center your face in the scanner');
-              localStability = 0;
-              updateStability(0);
-
-              blinkStateVal = 'waitingForOpen';
-              livenessVerifiedVal = false;
-              updateLiveness(blinkStateVal, livenessVerifiedVal);
-
-              drawUnmirroredText('WARN: SUBJECT ALIGNMENT OFF-CENTER', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
-              drawUnmirroredText('ALIGN RETICLE WITH CENTER DESCRIPTOR', 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-            }
-
-            // 4. Low light check
-            const sampleSize = 20;
-            const sampleX = Math.max(0, Math.min(videoWidth - sampleSize, Math.round(box.x + box.width / 2 - sampleSize / 2)));
-            const sampleY = Math.max(0, Math.min(videoHeight - sampleSize, Math.round(box.y + box.height / 2 - sampleSize / 2)));
-            let avgBrightness = 100;
-            try {
-              const offscreenCanvas = document.createElement('canvas');
-              offscreenCanvas.width = sampleSize;
-              offscreenCanvas.height = sampleSize;
-              const offCtx = offscreenCanvas.getContext('2d');
-              offCtx.drawImage(video, sampleX, sampleY, sampleSize, sampleSize, 0, 0, sampleSize, sampleSize);
-              const imgData = offCtx.getImageData(0, 0, sampleSize, sampleSize);
-              let totalBrightness = 0;
-              for (let i = 0; i < imgData.data.length; i += 4) {
-                const r = imgData.data[i];
-                const g = imgData.data[i+1];
-                const b = imgData.data[i+2];
-                totalBrightness += (r + g + b) / 3;
-              }
-              avgBrightness = Math.round(totalBrightness / (sampleSize * sampleSize));
-              if (avgBrightness < 45) {
-                updateStatus('FACE DETECTED');
-                updateMsg('Low lighting detected. Improve illumination');
-                localStability = 0;
-                updateStability(0);
-
-                blinkStateVal = 'waitingForOpen';
-                livenessVerifiedVal = false;
-                updateLiveness(blinkStateVal, livenessVerifiedVal);
-
-                drawUnmirroredText('WARN: LOW LUX INDEX DETECTED', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
-                drawUnmirroredText(`LIGHT SENSOR VALUE: ${avgBrightness} LUX (MIN: 45 LUX)`, 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-                return;
-              }
-            } catch (e) {
-              console.error("Brightness sample error", e);
-            }
-
-            // 5. Blur / confidence check
-            if (detection.detection.score < 0.65) {
-              updateStatus('FACE DETECTED');
-              updateMsg('Low visibility / Blurry face detected. Hold still');
-              localStability = 0;
-              updateStability(0);
-
-              blinkStateVal = 'waitingForOpen';
-              livenessVerifiedVal = false;
-              updateLiveness(blinkStateVal, livenessVerifiedVal);
-
-              drawUnmirroredText('WARN: HIGH GAIN / DEGRADED INF_CORE', 20, 30, 'rgba(234, 179, 8, 0.95)', 'bold 11px \"Courier New\", monospace');
-              drawUnmirroredText(`CALIBRATION SCORE: ${(detection.detection.score * 100).toFixed(1)}% (MIN: 65%)`, 20, 48, 'rgba(234, 179, 8, 0.8)', '9px \"Courier New\", monospace');
-              return;
-            }
-
-            // --- ALL QUALITY CHECKS PASSED: EXECUTE BLINK-LIVENESS ENGINE ---
+            // --- ALL QUALITY CHECKS BYPASSED FOR INSTANT UX ---
             const leftEye = positions.slice(36, 42);
             const rightEye = positions.slice(42, 48);
             const leftEAR = calculateEAR(leftEye);
             const rightEAR = calculateEAR(rightEye);
             const avgEAR = (leftEAR + rightEAR) / 2.0;
+            const avgBrightness = 100;
 
-            // Face stability validation to prevent immediate camera warm-up capture errors
+            // Face stability validation - only require 2 stable frames (~60ms) for instant enrollment
             localStability += 1;
             updateStability(localStability);
             
-            if (localStability < 25) {
+            if (localStability < 2) {
               updateStatus('FACE DETECTED');
-              updateMsg(`Stabilizing face sensors... Hold still (${localStability}/25)`);
+              updateMsg(`Stabilizing face sensors... Hold still (${localStability}/2)`);
               livenessVerifiedVal = false;
               blinkStateVal = 'waitingForOpen';
               updateLiveness(blinkStateVal, livenessVerifiedVal);
             } else {
-              // BYPASS BLINK DETECTION FOR DEBUG/FIX ONCE STABILIZED
+              // Bypass liveness / blink check completely for instant signature enrollment
               if (!livenessVerifiedVal) {
                 blinkStateVal = 'blinkDetected';
                 livenessVerifiedVal = true;
@@ -1582,7 +1481,14 @@ export default function AdminPanel() {
         const registeredRole = form.role;
         const registeredDept = form.department;
 
-        setForm({ id: '', name: '', email: '', password: '', role: 'employee', department: 'Engineering' });
+        setForm({
+          id: generateUniqueId(),
+          name: '',
+          email: '',
+          password: generatePassword(),
+          role: 'employee',
+          department: 'Engineering'
+        });
         closeMainModal();
         fetchEmployees();
 

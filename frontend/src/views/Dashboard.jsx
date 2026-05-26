@@ -106,18 +106,26 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!socket) return;
+    const isAdmin = user?.role === 'admin';
 
     const handleNewLog = (newLog) => {
+      // Data isolation: employees only see their own events
+      if (!isAdmin && newLog.employee_id !== user?.id) return;
+
       setLogs(prev => [newLog, ...prev].slice(0, 50));
       setMetrics(prev => {
         const update = { ...prev, totalLogsCount: prev.totalLogsCount + 1 };
-        if (newLog.event_type === 'ENTER_GEOFENCE' || newLog.event_type === 'CHECK_IN') update.activeEmployees = prev.activeEmployees + 1;
-        if (newLog.event_type === 'EXIT_GEOFENCE' || newLog.event_type === 'CHECK_OUT') update.activeEmployees = Math.max(0, prev.activeEmployees - 1);
+        if (isAdmin) {
+          if (newLog.event_type === 'ENTER_GEOFENCE' || newLog.event_type === 'CHECK_IN') update.activeEmployees = prev.activeEmployees + 1;
+          if (newLog.event_type === 'EXIT_GEOFENCE' || newLog.event_type === 'CHECK_OUT') update.activeEmployees = Math.max(0, prev.activeEmployees - 1);
+        }
         return update;
       });
     };
 
     const handleUnauthorizedAlert = (alert) => {
+      // Security alerts are admin-only — never leak to employees
+      if (!isAdmin) return;
       setMetrics(prev => ({ ...prev, securityAlerts: prev.securityAlerts + 1 }));
       setLogs(prev => [{
         id: Date.now(),
@@ -137,7 +145,7 @@ export default function Dashboard() {
       socket.off('logs:new', handleNewLog);
       socket.off('unauthorized:alert', handleUnauthorizedAlert);
     };
-  }, [socket]);
+  }, [socket, user]);
 
   const metricCards = user?.role === 'admin'
     ? [

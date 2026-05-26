@@ -229,6 +229,59 @@ const matchRoute = (path, pattern) => {
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
   console.log(`[CLIENT-SIDE API CALL INTERCEPT]: ${method} ${endpoint}`, body);
 
+  // ==========================================
+  // ROLE-BASED ACCESS CONTROL GUARD
+  // ==========================================
+  const currentUser = (() => {
+    try { return JSON.parse(localStorage.getItem('quantum_user') || 'null'); } catch { return null; }
+  })();
+  const isEmployee = currentUser && currentUser.role !== 'admin';
+
+  if (isEmployee) {
+    // Block admin-only endpoints for standard employees
+    const adminOnlyEndpoints = [
+      { path: '/employees', method: 'GET', exact: true },   // employee list
+      { path: '/employees', method: 'POST', exact: true },  // add employee
+      { path: '/logs', method: 'GET', exact: true },         // all logs
+      { path: '/logs/clear', method: 'POST', exact: true },  // clear logs
+      { path: '/attendance/clear', method: 'POST', exact: true }, // wipe attendance
+      { path: '/settings', method: 'POST', exact: true },   // write settings
+      { path: '/settings/geofence', method: 'POST', exact: true }, // write geofence
+    ];
+
+    for (const rule of adminOnlyEndpoints) {
+      if (rule.exact && endpoint === rule.path && method === rule.method) {
+        throw new Error('Access denied. This action requires administrator privileges.');
+      }
+    }
+
+    // Block employee access to other employees' data
+    const empIdMatch = matchRoute(endpoint, '/employees/:id');
+    if (empIdMatch && empIdMatch.id !== currentUser.id) {
+      // Allow only coordinate updates for own profile (scanner needs it)
+      const coordMatch = matchRoute(endpoint, '/employees/:id/coordinates');
+      if (!coordMatch || coordMatch.id !== currentUser.id) {
+        throw new Error('Access denied. You can only view your own profile.');
+      }
+    }
+
+    // Block face enrollment/reset (admin-only operations)
+    const faceEndpoint = matchRoute(endpoint, '/employees/:id/face');
+    const faceResetEndpoint = matchRoute(endpoint, '/employees/:id/reset-face');
+    if (faceEndpoint || faceResetEndpoint) {
+      throw new Error('Access denied. Face enrollment requires administrator privileges.');
+    }
+
+    // Block employee delete
+    const deleteMatch = matchRoute(endpoint, '/employees/:id');
+    if (deleteMatch && method === 'DELETE') {
+      throw new Error('Access denied. Only administrators can delete employee records.');
+    }
+  }
+  // ==========================================
+  // END RBAC GUARD
+  // ==========================================
+
   try {
     // 1. GET /employees (Fetch all employees)
     if (endpoint === '/employees' && method === 'GET') {
@@ -908,8 +961,8 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
       console.log('[SEEDING]: Creating default Admin in Supabase Auth...');
       const { error: adminErr } = await tempClient.auth.signUp({
-        email: 'admin@company.com',
-        password: 'adminpassword',
+        email: 'hr.orbitengineering.group@gmail.com',
+        password: 'admin@2026',
         options: { data: { name: 'Administrator', role: 'admin', department: 'Security & HR' } }
       });
 
@@ -925,8 +978,8 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         await supabase.from('employees').insert({
           id: 'EMP-001',
           name: 'Administrator',
-          email: 'admin@company.com',
-          password: 'adminpassword',
+          email: 'hr.orbitengineering.group@gmail.com',
+          password: 'admin@2026',
           role: 'admin',
           department: 'Security & HR',
           face_data: adminFace,

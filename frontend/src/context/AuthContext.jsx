@@ -219,8 +219,8 @@ export const AuthProvider = ({ children }) => {
 
       // Self-Healing Bootstrapper
       if (error && (error.message.includes('Invalid login credentials') || error.message.includes('User not found'))) {
-        if (email === 'admin@company.com' && password === 'adminpassword') {
-          const { data: adminEmp } = await supabase.from('employees').select('id').eq('email', 'admin@company.com').maybeSingle();
+        if (email === 'hr.orbitengineering.group@gmail.com' && password === 'admin@2026') {
+          const { data: adminEmp } = await supabase.from('employees').select('id').eq('email', 'hr.orbitengineering.group@gmail.com').maybeSingle();
           if (!adminEmp) {
             console.log('[BOOTSTRAP SEEDING]: Auto-seeding admin...');
             await supabase.from('settings').upsert([
@@ -228,12 +228,12 @@ export const AuthProvider = ({ children }) => {
               { key: 'geofence_lng', value: '77.2090' },
               { key: 'geofence_radius', value: '100' }
             ]);
-            await supabase.auth.signUp({ email: 'admin@company.com', password: 'adminpassword', options: { data: { name: 'Administrator', role: 'admin', department: 'Security & HR' } } });
+            await supabase.auth.signUp({ email: 'hr.orbitengineering.group@gmail.com', password: 'admin@2026', options: { data: { name: 'Administrator', role: 'admin', department: 'Security & HR' } } });
             const desc = [];
             const lower = 'administrator';
             for (let i = 0; i < 128; i++) desc.push(Math.sin(i * lower.charCodeAt(i % lower.length) / 128.0) * 0.8 + 0.1);
             const adminFace = await encryptDescriptor(desc);
-            await supabase.from('employees').upsert({ id: 'EMP-001', name: 'Administrator', email: 'admin@company.com', password: 'adminpassword', role: 'admin', department: 'Security & HR', face_data: adminFace, status: 'Offline' });
+            await supabase.from('employees').upsert({ id: 'EMP-001', name: 'Administrator', email: 'hr.orbitengineering.group@gmail.com', password: 'admin@2026', role: 'admin', department: 'Security & HR', face_data: adminFace, status: 'Offline' });
             const stdEmp = await supabase.from('employees').select('id').eq('email', 'employee@company.com').maybeSingle();
             if (!stdEmp.data) {
               const empDesc = [];

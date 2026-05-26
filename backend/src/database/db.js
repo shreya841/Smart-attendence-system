@@ -101,7 +101,7 @@ export const initializeDatabase = async () => {
   if (!adminExists) {
     console.log(`[DATABASE SEEDING]: No Admin detected. Seeding default Admin...`);
     const salt = await bcrypt.genSalt(10);
-    const adminHash = await bcrypt.hash('adminpassword', salt);
+    const adminHash = await bcrypt.hash('admin@2026', salt);
     
     const generateDescriptor = (name) => {
       const desc = [];
@@ -117,10 +117,10 @@ export const initializeDatabase = async () => {
     
     await run(`
       INSERT INTO employees (id, name, email, password, role, department, face_data) 
-      VALUES ('EMP-001', 'Administrator', 'admin@company.com', ?, 'admin', 'Security & HR', ?)
+      VALUES ('EMP-001', 'Administrator', 'hr.orbitengineering.group@gmail.com', ?, 'admin', 'Security & HR', ?)
     `, [adminHash, adminFace]);
     
-    console.log(`[DATABASE SEEDED]: Created Admin ('admin@company.com' / 'adminpassword') with active face biometrics.`);
+    console.log(`[DATABASE SEEDED]: Created Admin ('hr.orbitengineering.group@gmail.com' / 'admin@2026') with active face biometrics.`);
   }
 
   // Also seed default employee if database does not contain employee@company.com

@@ -25,9 +25,11 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect to Dashboard if user role is not allowed on this path
+  // Redirect if user role is not allowed on this path
+  // Employees go to their dashboard; admins go to the main dashboard
   if (allowedRoles.length > 0 && !allowedRoles.includes(user?.role)) {
-    return <Navigate to="/dashboard" replace />;
+    const fallback = user?.role === 'admin' ? '/dashboard' : '/employee-dashboard';
+    return <Navigate to={fallback} replace />;
   }
 
   return children;

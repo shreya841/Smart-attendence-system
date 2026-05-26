@@ -90,6 +90,44 @@ router.get('/', requireAdmin, async (req, res, next) => {
   }
 });
 
+// @route   GET /api/employees/me
+// @desc    Retrieve the authenticated user's own profile
+router.get('/me', async (req, res, next) => {
+  const db = getDb();
+  try {
+    const isSupabaseLive = await checkSupabaseConnection();
+    let emp = null;
+
+    if (isSupabaseLive) {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, name, email, role, department, avatar, status, latitude, longitude, created_at, face_data')
+        .eq('id', req.user.id)
+        .single();
+      if (!error && data) {
+        emp = { ...data, is_face_registered: data.face_data !== null };
+        delete emp.face_data;
+      }
+    }
+
+    if (!emp) {
+      emp = await db.get(`
+        SELECT id, name, email, role, department, avatar, status, latitude, longitude, created_at,
+               (face_data IS NOT NULL) AS is_face_registered
+        FROM employees WHERE id = ?
+      `, [req.user.id]);
+    }
+
+    if (!emp) {
+      return res.status(404).json({ success: false, message: 'Employee profile not found.' });
+    }
+
+    res.json({ success: true, employee: emp });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // @route   GET /api/employees/:id
 // @desc    Retrieve details for a single employee
 router.get('/:id', async (req, res, next) => {

@@ -268,9 +268,9 @@ export default function BiometricScanner() {
         setGpsLoading(false);
       },
       {
-        enableHighAccuracy: true,
-        timeout: 3000,
-        maximumAge: 5000 // Cache GPS coordinates for 5s to reduce CPU overhead and map rerenders
+        enableHighAccuracy: false,
+        timeout: 1000,
+        maximumAge: 30000
       }
     );
 
@@ -401,13 +401,6 @@ export default function BiometricScanner() {
   // 6. Automatic Face Identification Action
   const handleAutoScan = async (descriptorArray) => {
     if (isProcessingRef.current || cooldownActive.current || scanInProgress.current) return;
-    
-    // Strict GPS Readiness Check
-    if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
-      console.warn('[SCAN BLOCKED] Waiting for GPS lock...');
-      setScannerStatusMsg('WAITING FOR GPS LOCK...');
-      return;
-    }
 
     isProcessingRef.current = true;
     scanInProgress.current = true; // Prevent concurrent scan submissions.
@@ -418,17 +411,17 @@ export default function BiometricScanner() {
     setScannerStatusMsg('BIOMETRIC MATCH IN PROGRESS...');
 
     try {
-      console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Sending biometric descriptor to verification API. Coordinates:', userCoords.latitude, userCoords.longitude);
-      
-      // Fallback Safety inside local call
+      // Fallback Safety inside local call - immediately fall back to office coordinates if GPS not ready
       let currentCoords = userCoords;
       if (!currentCoords || !currentCoords.latitude || !currentCoords.longitude) {
-        console.warn('[GPS FALLBACK] Missing GPS coordinates. Using office fallback.');
+        console.warn('[GPS FALLBACK] GPS coordinates not ready. Using office fallback.');
         currentCoords = {
           latitude: officeCoords[0] || 28.6139,
           longitude: officeCoords[1] || 77.2090
         };
       }
+
+      console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Sending biometric descriptor to verification API. Coordinates:', currentCoords.latitude, currentCoords.longitude);
 
       const scanPromise = submitAttendanceScan(descriptorArray, currentCoords);
       const timeoutPromise = new Promise((_, reject) =>
@@ -513,32 +506,27 @@ export default function BiometricScanner() {
           const detection = faceapi.resizeResults(rawDetection, displaySize);
           setRealtimeScore(Math.round(detection.detection.score * 100));
 
-          // Increment stability frames immediately upon detection
+          // Increment stability frames immediately upon detection - only require 2 frames (~60ms) for instant lock
           consecutiveFrontFrames.current += 1;
-          const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 3) * 100));
+          const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 2) * 100));
           setTelemetryLockProgress(progress);
 
-          const isLocked = consecutiveFrontFrames.current >= 3 || cooldownActive.current;
+          const isLocked = consecutiveFrontFrames.current >= 2 || cooldownActive.current;
           drawCustomDetections(ctx, detection, isLocked);
           drawCustomMesh(ctx, detection.landmarks, isLocked);
 
           // Force pose telemetry to 'front' immediately to reflect a premium locked state on the HUD
           setTelemetryPose('front');
 
-          // Auto-trigger scan if face remains stable for 3 frames (~100ms) for high-speed terminal UX
-          if (consecutiveFrontFrames.current >= 3 && !cooldownActive.current && !scanInProgress.current) {
-            if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
-              console.warn('[SCAN BLOCKED] Waiting for GPS lock on stability trigger...');
-              setScannerStatusMsg('WAITING FOR GPS LOCK...');
-            } else {
-              console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (3 frames). Instantly executing auto-scan...');
-              setScannerStatusMsg('FACE LOCKED - SCANNING...');
-              handleAutoScan(detection.descriptor);
-            }
+          // Auto-trigger scan if face remains stable for 2 frames (~60ms) for high-speed terminal UX
+          if (consecutiveFrontFrames.current >= 2 && !cooldownActive.current && !scanInProgress.current) {
+            console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (2 frames). Instantly executing auto-scan...');
+            setScannerStatusMsg('FACE LOCKED - SCANNING...');
+            handleAutoScan(detection.descriptor);
           }
 
           // UI status updates
-          if (consecutiveFrontFrames.current < 2) {
+          if (consecutiveFrontFrames.current < 1) {
             setScannerStatusMsg('STABILIZING FACE...');
           } else {
             setScannerStatusMsg('FACE LOCKED - SCANNING...');
