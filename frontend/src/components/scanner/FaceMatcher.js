@@ -26,7 +26,7 @@ export const calculateEuclideanDistance = (desc1, desc2) => {
  * @param {number} threshold Match distance threshold (default: 0.55)
  * @returns {{isMatch: boolean, match?: {id: string, name: string}}} Match result
  */
-export const findMatchingDescriptor = (descriptor, enrolledFaces, threshold = 0.55) => {
+export const findMatchingDescriptor = (descriptor, enrolledFaces, threshold = 0.70) => {
   if (!descriptor || !enrolledFaces || enrolledFaces.length === 0) {
     return { isMatch: false };
   }

@@ -345,8 +345,8 @@ export default function AdminPanel() {
     let fps = 60;
     let lastTime = performance.now();
 
-    // Instantiate detector options with optimized size and score for higher accuracy
-    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+    // Instantiate detector options with optimized size and score for ultra-fast face detection
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.4 });
 
     // Blink-Liveness tracking state variables in closure
     let blinkStateVal = 'waitingForOpen'; // 'waitingForOpen' | 'waitingForClose' | 'waitingForReopen' | 'blinkDetected'

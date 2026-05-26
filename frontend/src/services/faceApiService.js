@@ -41,10 +41,10 @@ export const detectFaceBiometrics = async (videoElement) => {
     await loadFaceApiModels();
   }
 
-  // inputSize 224 gives better landmark accuracy for blink detection (EAR)
+  // inputSize 160 gives ultra-fast face detection matching real-world biometric scanner terminals
   // scoreThreshold 0.4 allows faster detection at slight distance/angle
   const options = new faceapi.TinyFaceDetectorOptions({
-    inputSize: 224,
+    inputSize: 160,
     scoreThreshold: 0.4
   });
 

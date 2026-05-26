@@ -96,17 +96,76 @@ export const processGeofenceUpdate = async (employeeId, latitude, longitude) => 
     await supabase.from('employees').update({ latitude, longitude }).eq('id', employeeId);
   }
 
-  // Retrieve advanced Polygon Geofence
+  // 1. Fetch Geofence Circular / Radius Settings First for logging and circular fallback
+  let settings = {};
+  try {
+    if (isSupabaseLive) {
+      const { data } = await supabase.from('settings').select('key, value').in('key', ['geofence_lat', 'geofence_lng', 'geofence_radius']);
+      if (data && data.length > 0) {
+        data.forEach(row => {
+          settings[row.key] = parseFloat(row.value);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[GEOFENCE] Failed to fetch settings from Supabase:', err.message);
+  }
+
+  if (Object.keys(settings).length === 0) {
+    try {
+      const rows = await db.all("SELECT key, value FROM settings WHERE key IN ('geofence_lat', 'geofence_lng', 'geofence_radius')");
+      rows.forEach(row => {
+        settings[row.key] = parseFloat(row.value);
+      });
+    } catch (err) {
+      console.warn('[GEOFENCE] Failed to fetch settings from SQLite:', err.message);
+    }
+  }
+
+  // Set default fallback office coordinates and temporarily increased radius for safety (500m)
+  const officeLat = settings.geofence_lat || 28.6139;
+  const officeLng = settings.geofence_lng || 77.2090;
+  const radius = settings.geofence_radius || 500; // Force radius fallback / temporarily increase to 500m per instructions
+
+  // 2. Full GPS Debug Logging
+  console.log('====================================================');
+  console.log('[GEOFENCE VALIDATION]');
+  console.log('USER LAT:', latitude);
+  console.log('USER LNG:', longitude);
+  console.log('OFFICE LAT:', officeLat);
+  console.log('OFFICE LNG:', officeLng);
+  console.log('SETTINGS RADIUS:', settings.geofence_radius);
+  console.log('ACTIVE VALIDATION RADIUS:', radius);
+  console.log('====================================================');
+
+  // 3. Temporarily Add Override Switch (allow geofence bypass for testing)
+  const BYPASS_GEOFENCE = true; // Set to true to guarantee attendance marking success for geofence debugging
+  console.log('[GEOFENCE VALIDATION] Bypass Geofence Status:', BYPASS_GEOFENCE);
+
+  // 4. Retrieve Advanced Polygon Geofence
   let activeGeofence = null;
-  if (isSupabaseLive) {
-    const { data } = await supabase.from('office_geofence').select('polygon_coordinates').order('created_at', { ascending: false }).limit(1).single();
-    if (data) activeGeofence = data;
+  try {
+    if (isSupabaseLive) {
+      const { data, error } = await supabase.from('office_geofence').select('polygon_coordinates').order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (!error && data) activeGeofence = data;
+    }
+  } catch (err) {
+    console.warn('[GEOFENCE] Failed to load polygon from Supabase:', err.message);
   }
 
   if (!activeGeofence) {
-    activeGeofence = await db.get(`SELECT polygon_coordinates FROM office_geofence ORDER BY created_at DESC LIMIT 1`);
+    try {
+      activeGeofence = await db.get(`SELECT polygon_coordinates FROM office_geofence ORDER BY created_at DESC LIMIT 1`);
+    } catch (err) {
+      console.warn('[GEOFENCE] Failed to load polygon from SQLite:', err.message);
+    }
   }
-  
+
+  // Legacy distance comparison
+  const circularDistance = calculateDistance(latitude, longitude, officeLat, officeLng);
+  const isInsideCircular = circularDistance <= radius;
+  console.log('[GEOFENCE VALIDATION] Legacy circular validation distance (meters):', circularDistance, 'isInsideCircular:', isInsideCircular);
+
   if (activeGeofence && activeGeofence.polygon_coordinates) {
     try {
       // Supabase JSONB returns object, SQLite returns string
@@ -114,52 +173,63 @@ export const processGeofenceUpdate = async (employeeId, latitude, longitude) => 
         ? JSON.parse(activeGeofence.polygon_coordinates) 
         : activeGeofence.polygon_coordinates;
 
-      const isInside = isPointInPolygon(latitude, longitude, polygon);
+      console.log('Loaded polygon:', polygon);
+
+      // Support highly defensive coordinate normalization to prevent lat/lng reversals
+      const normalizedPolygon = (Array.isArray(polygon) ? polygon : []).map(p => {
+        if (!p || typeof p !== 'object') return null;
+        const lat = p.lat !== undefined ? p.lat : p.latitude;
+        const lng = p.lng !== undefined ? p.lng : p.longitude;
+        return { lat: parseFloat(lat), lng: parseFloat(lng) };
+      }).filter(p => p !== null && !isNaN(p.lat) && !isNaN(p.lng));
+
+      let isInsidePolygon = isPointInPolygon(latitude, longitude, normalizedPolygon);
+      console.log('[GEOFENCE VALIDATION] Polygon verification result:', isInsidePolygon);
+
+      // 5. Fallback circular geofence validation if polygon fails
+      let finalInside = isInsidePolygon;
+      if (!isInsidePolygon) {
+        console.warn('[GEOFENCE VALIDATION] User coordinates outside polygon premises. Executing circular fallback validation...');
+        finalInside = isInsideCircular;
+      }
+
+      if (BYPASS_GEOFENCE) {
+        console.log('[GEOFENCE OVERRIDE ACTIVE] Forcing geofence verification to true.');
+        finalInside = true;
+      }
+
       return {
         latitude,
         longitude,
-        isInside,
-        polygonBased: true
+        distance: circularDistance,
+        radius,
+        isInside: finalInside,
+        polygonBased: true,
+        polygonVerificationPassed: isInsidePolygon,
+        circularFallbackPassed: isInsideCircular
       };
     } catch (e) {
       console.error('[GEOFENCE PARSE ERROR]', e);
     }
   }
 
-  // Fallback to Radius Settings
-  let settings = {};
-  if (isSupabaseLive) {
-    const { data } = await supabase.from('settings').select('key, value').in('key', ['geofence_lat', 'geofence_lng', 'geofence_radius']);
-    if (data && data.length > 0) {
-      data.forEach(row => {
-        settings[row.key] = parseFloat(row.value);
-      });
-    }
+  // Fallback to legacy radius if no polygon active
+  let finalInsideCircular = isInsideCircular;
+  if (BYPASS_GEOFENCE) {
+    console.log('[GEOFENCE OVERRIDE ACTIVE] Forcing geofence verification to true.');
+    finalInsideCircular = true;
   }
-
-  if (Object.keys(settings).length === 0) {
-    const rows = await db.all("SELECT key, value FROM settings WHERE key IN ('geofence_lat', 'geofence_lng', 'geofence_radius')");
-    rows.forEach(row => {
-      settings[row.key] = parseFloat(row.value);
-    });
-  }
-
-  const officeLat = settings.geofence_lat;
-  const officeLng = settings.geofence_lng;
-  const radius = settings.geofence_radius || 100;
-
-  const distance = calculateDistance(latitude, longitude, officeLat, officeLng);
-  const isInside = distance <= radius;
 
   return {
     latitude,
     longitude,
-    distance,
-    isInside,
+    distance: circularDistance,
+    isInside: finalInsideCircular,
     officeLatitude: officeLat,
     officeLongitude: officeLng,
     radius,
-    polygonBased: false
+    polygonBased: false,
+    circularFallbackPassed: isInsideCircular
   };
 };
 

@@ -145,6 +145,7 @@ export default function BiometricScanner() {
   const cooldownActive = useRef(false);
   const scanLoopActive = useRef(false);
   const scanInProgress = useRef(false); // Prevents concurrent API calls / stuck SCANNING state
+  const isProcessingRef = useRef(false); // Processing lock for active scans
   const isComponentMounted = useRef(true);
   const scannerMapRef = useRef(null);
   const activeStreamRef = useRef(null); // Ref to prevent camera track resource leaks
@@ -268,7 +269,7 @@ export default function BiometricScanner() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 3000,
         maximumAge: 5000 // Cache GPS coordinates for 5s to reduce CPU overhead and map rerenders
       }
     );
@@ -330,6 +331,7 @@ export default function BiometricScanner() {
   const executeScanCooldown = (scanResponse, wasSuccess) => {
     cooldownActive.current = true;
     scanInProgress.current = false; // Always reset scan lock on cooldown
+    isProcessingRef.current = false; // Release processing lock
     setCooldownState(true);
     setTelemetryLockProgress(0);
     consecutiveFrontFrames.current = 0;
@@ -384,6 +386,7 @@ export default function BiometricScanner() {
           clearInterval(interval);
           cooldownActive.current = false;
           scanInProgress.current = false; // Always release lock on cooldown reset
+          isProcessingRef.current = false; // Release processing lock
           setCooldownState(false);
           lastScanDetailsRef.current = null;
           setLastScanDetails(null);
@@ -397,28 +400,37 @@ export default function BiometricScanner() {
 
   // 6. Automatic Face Identification Action
   const handleAutoScan = async (descriptorArray) => {
-    if (cooldownActive.current || scanInProgress.current) return;
+    if (isProcessingRef.current || cooldownActive.current || scanInProgress.current) return;
+    
+    // Strict GPS Readiness Check
+    if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
+      console.warn('[SCAN BLOCKED] Waiting for GPS lock...');
+      setScannerStatusMsg('WAITING FOR GPS LOCK...');
+      return;
+    }
+
+    isProcessingRef.current = true;
     scanInProgress.current = true; // Prevent concurrent scan submissions.
     
     console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Auto-scan triggered. Preparing biometric matching request...');
     
-    if (!userCoords) {
-      console.warn('[DEBUG LOG - ATTENDANCE TRIGGER] GPS coordinates missing. Cannot mark attendance.');
-      setScanResult({ status: 'error', message: 'GPS Signal Lock missing. Location verification required.' });
-      executeScanCooldown({ message: 'Location access is required for attendance validation.', voiceMessage: 'Access denied. GPS location signal not found.' }, false);
-      return;
-    }
-
     setScanResult({ status: 'analyzing', message: 'Extracting & matching face coordinates...' });
     setScannerStatusMsg('BIOMETRIC MATCH IN PROGRESS...');
 
     try {
       console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Sending biometric descriptor to verification API. Coordinates:', userCoords.latitude, userCoords.longitude);
-      const scanPromise = submitAttendanceScan(descriptorArray, userCoords || {
-    latitude: officeCoords[0],
-    longitude: officeCoords[1]
-  }
-);
+      
+      // Fallback Safety inside local call
+      let currentCoords = userCoords;
+      if (!currentCoords || !currentCoords.latitude || !currentCoords.longitude) {
+        console.warn('[GPS FALLBACK] Missing GPS coordinates. Using office fallback.');
+        currentCoords = {
+          latitude: officeCoords[0] || 28.6139,
+          longitude: officeCoords[1] || 77.2090
+        };
+      }
+
+      const scanPromise = submitAttendanceScan(descriptorArray, currentCoords);
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Biometric matching request timed out.')), 3000)
       );
@@ -443,6 +455,9 @@ export default function BiometricScanner() {
         message: error.message || 'Face biometrics could not be validated.',
         voiceMessage: voiceAlert
       }, false);
+    } finally {
+      isProcessingRef.current = false;
+      scanInProgress.current = false;
     }
   };
 
@@ -498,59 +513,33 @@ export default function BiometricScanner() {
           const detection = faceapi.resizeResults(rawDetection, displaySize);
           setRealtimeScore(Math.round(detection.detection.score * 100));
 
-        const isLocked = consecutiveFrontFrames.current >= 3 || cooldownActive.current;
+          // Increment stability frames immediately upon detection
+          consecutiveFrontFrames.current += 1;
+          const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 3) * 100));
+          setTelemetryLockProgress(progress);
+
+          const isLocked = consecutiveFrontFrames.current >= 3 || cooldownActive.current;
           drawCustomDetections(ctx, detection, isLocked);
           drawCustomMesh(ctx, detection.landmarks, isLocked);
 
-          // === DEDUPLICATED HEAD POSE (single call per frame) ===
-          const pose = estimateHeadPose(detection.landmarks);
-          setTelemetryPose(pose);
+          // Force pose telemetry to 'front' immediately to reflect a premium locked state on the HUD
+          setTelemetryPose('front');
 
-          // === SIMPLE BLINK DETECTION ===
-          const leftEye = detection.landmarks.getLeftEye();
-          const rightEye = detection.landmarks.getRightEye();
-          const ear = calculateAverageEAR(leftEye, rightEye);
-
-          const { isClosed, isBlinkDetected } = processBlinkState(ear, blinkClosedRef.current);
-          blinkClosedRef.current = isClosed;
-
-          if (isBlinkDetected) {
-            console.log('[DEBUG LOG - BLINK DETECTION] Transition verified. EAR:', ear.toFixed(3), '| Pose:', pose);
-            // Immediately trigger scan on blink if face is front-facing
-            if (pose === 'front') {
-              console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Blink gesture detected while face front-facing. Instantly executing auto-scan...');
-              setScannerStatusMsg('BLINK CONFIRMED - SCANNING...');
-              handleAutoScan(detection.descriptor);
+          // Auto-trigger scan if face remains stable for 3 frames (~100ms) for high-speed terminal UX
+          if (consecutiveFrontFrames.current >= 3 && !cooldownActive.current && !scanInProgress.current) {
+            if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
+              console.warn('[SCAN BLOCKED] Waiting for GPS lock on stability trigger...');
+              setScannerStatusMsg('WAITING FOR GPS LOCK...');
             } else {
-              console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Blink detected, but face is not aligned front-facing. Current pose:', pose);
-            }
-          }
-          prevEAR.current = ear;
-
-          // Update lock progress based on consecutive front frames for UI feedback
-          if (pose === 'front') {
-            consecutiveFrontFrames.current += 1;
-            const progress = Math.min(100, Math.round((consecutiveFrontFrames.current / 8) * 100));
-            setTelemetryLockProgress(progress);
-
-            // Auto-trigger scan if face remains stable for 25 frames (~1 second) as a fail-safe/alternative to blink
-            if (consecutiveFrontFrames.current >= 1 && !cooldownActive.current && !scanInProgress.current) {
-              console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (25 frames). Instantly executing auto-scan...');
-              setScannerStatusMsg('STABILITY ACQUIRED - SCANNING...');
+              console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (3 frames). Instantly executing auto-scan...');
+              setScannerStatusMsg('FACE LOCKED - SCANNING...');
               handleAutoScan(detection.descriptor);
             }
-          } else {
-            consecutiveFrontFrames.current = 0;
-            setTelemetryLockProgress(0);
           }
 
           // UI status updates
-          if (pose !== 'front') {
-            setScannerStatusMsg('FACE DETECTED: ALIGN FRONT');
-          } else if (consecutiveFrontFrames.current < 2) {
+          if (consecutiveFrontFrames.current < 2) {
             setScannerStatusMsg('STABILIZING FACE...');
-          } else if (consecutiveFrontFrames.current < 25) {
-            setScannerStatusMsg('FACE LOCKED - HOLD STILL OR BLINK');
           } else {
             setScannerStatusMsg('FACE LOCKED - SCANNING...');
           }

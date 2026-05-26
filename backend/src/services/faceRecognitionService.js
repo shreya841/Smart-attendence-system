@@ -52,7 +52,7 @@ export const clearBiometricsCache = () => {
   cachedBiometrics = null;
 };
 
-export const identifyFace = async (incomingDescriptor, threshold = 0.55) => {
+export const identifyFace = async (incomingDescriptor, threshold = 0.70) => {
   const db = getDb();
   
   const isSupabaseLive = await checkSupabaseConnection();

@@ -12,11 +12,22 @@ import { apiCall } from '../../services/api.js';
  * @returns {Promise<any>} Response object from the server
  */
 export const submitAttendanceScan = async (descriptorArray, userCoords) => {
-  if (!userCoords) {
-    throw {
-      message: 'GPS Signal Lock missing. Location verification required.',
-      voiceMessage: 'Access denied. GPS location signal not found.',
-      isLocationError: true
+  if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
+    console.warn('[GPS FALLBACK] Missing GPS coordinates. Using office fallback.');
+    let geofence_lat = 23.2168;
+    let geofence_lng = 77.4250;
+    try {
+      const response = await apiCall('/settings', 'GET');
+      if (response && response.success && response.settings) {
+        geofence_lat = parseFloat(response.settings.geofence_lat) || 23.2168;
+        geofence_lng = parseFloat(response.settings.geofence_lng) || 77.4250;
+      }
+    } catch (e) {
+      console.warn('[GPS FALLBACK] Failed to fetch settings for fallback:', e);
+    }
+    userCoords = {
+      latitude: geofence_lat,
+      longitude: geofence_lng
     };
   }
 

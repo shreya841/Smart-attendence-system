@@ -51,9 +51,9 @@ export function ScannerTelemetryHUD({
           <motion.span 
             animate={{ opacity: [1, 0, 1] }} 
             transition={{ repeat: Infinity, duration: 1 }}
-            className="text-amber-600 font-medium ml-1"
+            className="text-emerald-600 font-semibold ml-1"
           >
-            Blink now
+            LOCKED
           </motion.span>
         )}
       </div>
