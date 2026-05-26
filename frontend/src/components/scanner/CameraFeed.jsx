@@ -19,19 +19,19 @@ export default function CameraFeed({ videoRef, cameraActive, modelsStatus }) {
   }
 
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-600 gap-3 bg-slate-950">
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50 text-slate-600">
       {modelsStatus === 'loading' ? (
-        <RefreshCw className="w-10 h-10 text-cyber-cyan animate-spin" />
+        <RefreshCw className="h-10 w-10 animate-spin text-indigo-600" />
       ) : (
-        <CameraOff className="w-10 h-10 text-slate-800 animate-pulse" />
+        <CameraOff className="h-10 w-10 text-slate-400" />
       )}
-      <p className="text-xs uppercase tracking-widest text-slate-500 font-bold">
-        {modelsStatus === 'loading' ? 'Downloading Deep Models...' : 'Biometric Hardware Offline'}
+      <p className="text-sm font-semibold text-slate-700">
+        {modelsStatus === 'loading' ? 'Loading biometric models...' : 'Camera is offline'}
       </p>
-      <p className="text-[9px] text-slate-600 px-6 text-center max-w-xs leading-normal uppercase">
-        {modelsStatus === 'loading' 
-          ? 'Fetching tiny face detector and landmarks weights from high-speed cache...' 
-          : 'Web camera system disengaged. Click start below to initiate scanners.'}
+      <p className="max-w-xs px-6 text-center text-xs leading-relaxed text-slate-500">
+        {modelsStatus === 'loading'
+          ? 'Preparing face detection and landmark models.'
+          : 'Start the camera to begin attendance scanning.'}
       </p>
     </div>
   );

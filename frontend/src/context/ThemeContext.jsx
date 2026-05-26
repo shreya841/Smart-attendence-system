@@ -4,7 +4,7 @@ const ThemeContext = createContext();
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('quantum_theme') || 'dark';
+    return localStorage.getItem('quantum_theme') || 'light';
   });
 
   useEffect(() => {
@@ -12,11 +12,16 @@ export function ThemeProvider({ children }) {
     const body = document.body;
     if (theme === 'light') {
       root.classList.add('light-theme');
+      root.classList.remove('dark-theme');
       body.classList.add('light-theme');
+      body.classList.remove('dark-theme');
     } else {
       root.classList.remove('light-theme');
+      root.classList.add('dark-theme');
       body.classList.remove('light-theme');
+      body.classList.add('dark-theme');
     }
+    root.dataset.theme = theme;
     localStorage.setItem('quantum_theme', theme);
   }, [theme]);
 

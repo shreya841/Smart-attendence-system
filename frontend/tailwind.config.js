@@ -8,31 +8,40 @@ export default {
     extend: {
       colors: {
         cyber: {
-          bg: '#0B0F19',
-          surface: '#111827',
-          border: 'rgba(255, 255, 255, 0.08)',
-          'card-bg': 'rgba(17, 24, 39, 0.6)',
-          cyan: '#06B6D4',
+          bg: '#F8FAFC',
+          surface: 'rgba(255,255,255,0.75)',
+          border: 'rgba(148,163,184,0.24)',
+          cyan: '#14B8A6',
           blue: '#3B82F6',
           green: '#10B981',
           red: '#EF4444',
           gold: '#F59E0B',
+        },
+        premium: {
+          bg: '#F8FAFC',
+          surface: 'rgba(255, 255, 255, 0.75)',
+          surfaceStrong: 'rgba(255, 255, 255, 0.85)',
+          border: 'rgba(148, 163, 184, 0.24)',
+          primary: '#4F46E5',
+          primarySoft: '#6366F1',
+          blue: '#3B82F6',
+          teal: '#14B8A6',
+          green: '#10B981',
+          red: '#EF4444',
+          amber: '#F59E0B',
         }
       },
       fontFamily: {
-        sans: ['Outfit', 'Inter', 'sans-serif'],
-        mono: ['Fira Code', 'Courier New', 'monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       boxShadow: {
-        'cyan-glow': '0 0 15px rgba(6, 182, 212, 0.4)',
-        'blue-glow': '0 0 15px rgba(59, 130, 246, 0.4)',
-        'green-glow': '0 0 15px rgba(16, 185, 129, 0.4)',
-        'red-glow': '0 0 20px rgba(239, 68, 68, 0.5)',
-        'gold-glow': '0 0 15px rgba(245, 158, 11, 0.4)',
+        premium: '0 18px 60px rgba(15, 23, 42, 0.08)',
+        premiumStrong: '0 24px 72px rgba(15, 23, 42, 0.12)',
       },
       animation: {
-        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'scan-line': 'scan 3s linear infinite',
+        'pulse-slow': 'pulse 6s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'scan-line': 'scan 4s linear infinite',
       },
       keyframes: {
         scan: {

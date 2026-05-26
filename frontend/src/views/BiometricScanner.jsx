@@ -398,7 +398,7 @@ export default function BiometricScanner() {
   // 6. Automatic Face Identification Action
   const handleAutoScan = async (descriptorArray) => {
     if (cooldownActive.current || scanInProgress.current) return;
-    scanInProgress.current = true; // Lock — prevents concurrent calls
+    scanInProgress.current = true; // Prevent concurrent scan submissions.
     
     console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Auto-scan triggered. Preparing biometric matching request...');
     
@@ -519,7 +519,7 @@ export default function BiometricScanner() {
             // Immediately trigger scan on blink if face is front-facing
             if (pose === 'front') {
               console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Blink gesture detected while face front-facing. Instantly executing auto-scan...');
-              setScannerStatusMsg('BLINK CONFIRMED — SCANNING...');
+              setScannerStatusMsg('BLINK CONFIRMED - SCANNING...');
               handleAutoScan(detection.descriptor);
             } else {
               console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Blink detected, but face is not aligned front-facing. Current pose:', pose);
@@ -536,7 +536,7 @@ export default function BiometricScanner() {
             // Auto-trigger scan if face remains stable for 25 frames (~1 second) as a fail-safe/alternative to blink
             if (consecutiveFrontFrames.current >= 1 && !cooldownActive.current && !scanInProgress.current) {
               console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (25 frames). Instantly executing auto-scan...');
-              setScannerStatusMsg('STABILITY ACQUIRED — SCANNING...');
+              setScannerStatusMsg('STABILITY ACQUIRED - SCANNING...');
               handleAutoScan(detection.descriptor);
             }
           } else {
@@ -550,9 +550,9 @@ export default function BiometricScanner() {
           } else if (consecutiveFrontFrames.current < 2) {
             setScannerStatusMsg('STABILIZING FACE...');
           } else if (consecutiveFrontFrames.current < 25) {
-            setScannerStatusMsg('FACE LOCKED — HOLD STILL OR BLINK');
+            setScannerStatusMsg('FACE LOCKED - HOLD STILL OR BLINK');
           } else {
-            setScannerStatusMsg('FACE LOCKED — SCANNING...');
+            setScannerStatusMsg('FACE LOCKED - SCANNING...');
           }
         } else {
           setRealtimeScore(0);
@@ -565,7 +565,7 @@ export default function BiometricScanner() {
         }
       } catch (err) {
         console.error('[BIOMETRIC SCAN LOOP ERROR]:', err);
-        setScannerStatusMsg('SCANNER ERROR — RETRYING...');
+        setScannerStatusMsg('SCANNER ERROR - RETRYING...');
         scanInProgress.current = false; // Reset on error so loop can recover
         blinkClosedRef.current = false;
       }
@@ -642,58 +642,66 @@ export default function BiometricScanner() {
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="max-w-7xl mx-auto space-y-8 font-mono text-slate-300"
+      className="mx-auto max-w-7xl space-y-6"
     >
-      {/* Sci-Fi Header */}
-      <div className="text-center space-y-2.5">
-        <h2 className="text-sm font-bold tracking-widest text-white uppercase flex items-center justify-center gap-2">
-          <Scan className="w-5 h-5 text-cyber-cyan animate-pulse" />
-          AI Biometric Attendance Terminal
-        </h2>
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#090d16]/75 border border-white/5 rounded-lg text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-          <Clock className="w-4 h-4 text-cyber-cyan" />
-          Office Core Timings: <span className="text-white">10:00 AM - 19:00 PM</span>
+      <div className="hero-band relative overflow-hidden rounded-xl p-5 md:p-6">
+        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-white/20 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-12 h-52 w-52 rounded-full bg-white/10 blur-3xl" />
+        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] opacity-80">AI scanner</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">Biometric attendance terminal</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 opacity-85">Face matching, liveness, GPS validation, and attendance status in one focused enterprise console.</p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/16 px-3 py-1.5 text-xs font-semibold backdrop-blur-md">
+            <Clock className="h-3.5 w-3.5" />
+            Office hours: <span className="font-semibold">10:00 AM - 7:00 PM</span>
+          </div>
+        </div>
+        <div className="relative z-10 mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+          {[
+            { label: 'Models', value: modelsStatus === 'ready' ? 'Ready' : modelsStatus },
+            { label: 'Camera', value: cameraActive ? 'Live' : 'Idle' },
+            { label: 'GPS', value: gpsLoading ? 'Locating' : gpsError ? 'Blocked' : 'Locked' },
+            { label: 'Zone', value: gpsLoading ? 'Checking' : gpsError ? 'Blocked' : isInside ? 'Approved' : 'Outside' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-white/20 bg-white/14 p-3 backdrop-blur-md">
+              <p className="text-[11px] font-medium uppercase tracking-wide opacity-70">{item.label}</p>
+              <p className="mt-1 truncate text-base font-semibold">{item.value}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Grid workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Left Panel: Retinal webcam viewport */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="w-full glass-panel rounded-2xl p-6 overflow-hidden relative flex flex-col items-center shadow-2xl h-fit"
+          className="glass-panel-heavy scan-frame relative flex h-fit w-full flex-col items-center overflow-hidden rounded-xl p-5 pt-6"
         >
-          <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
-          
-          <div className="w-full flex items-center justify-between border-b border-white/5 pb-3.5 mb-5">
-            <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase flex items-center gap-2 select-none">
-              <span className={`w-2 h-2 rounded-full ${cameraActive && !cooldownState ? 'bg-cyber-cyan animate-ping shadow-cyan-glow' : 'bg-slate-700'}`}></span>
-              Retinal Telemetry Capture
+          <div className="spectrum-bar absolute left-0 right-0 top-0 h-1" />
+          <div className="mb-5 flex w-full items-center justify-between border-b border-slate-200 pb-4">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <span className={`h-2 w-2 rounded-full ${cameraActive && !cooldownState ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+              Camera capture
             </span>
 
-            {/* Voice toggle */}
             <button
               onClick={() => {
                 const next = !voiceEnabled;
                 voiceEnabledRef.current = next;
                 setVoiceEnabled(next);
               }}
-              className={`p-2 rounded-xl border flex items-center gap-1.5 text-[8px] font-bold font-mono tracking-wider select-none transition-all duration-200 cursor-pointer ${
-                voiceEnabled ? 'bg-cyber-cyan/10 text-cyber-cyan border-cyber-cyan/20 shadow-cyan-glow' : 'bg-slate-900 border-white/5 text-slate-500 hover:text-slate-400'
+              className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                voiceEnabled ? 'border-indigo-100 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-900'
               }`}
             >
-              <Volume2 className="w-3.5 h-3.5" />
-              {voiceEnabled ? 'SYS_VOICE: ON' : 'SYS_VOICE: MUTED'}
+              <span className="inline-flex items-center gap-1.5"><Volume2 className="h-3.5 w-3.5" />{voiceEnabled ? 'Voice on' : 'Voice muted'}</span>
             </button>
           </div>
 
-          {/* Camera feed viewport with scifi neon overlays */}
-          <div className="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-white/5 shadow-inner mx-auto">
-            
-            {/* 1. Camera Feed Viewport */}
+          <div className="relative mx-auto aspect-video w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-950">
             <CameraFeed 
               videoRef={videoRef} 
               cameraActive={cameraActive} 
@@ -737,17 +745,16 @@ export default function BiometricScanner() {
                   initial={{ opacity: 0, y: 15, x: '-50%' }}
                   animate={{ opacity: 1, y: 0, x: '-50%' }}
                   exit={{ opacity: 0, y: 15, x: '-50%' }}
-                  className="absolute bottom-4 left-1/2 bg-[#090d16]/95 border border-cyber-cyan/25 rounded-xl px-4 py-2.5 flex items-center gap-3 max-w-[90%] shadow-[0_4px_25px_rgba(6,182,212,0.12)] z-40 select-none"
+                  className="absolute bottom-4 left-1/2 z-40 flex max-w-[90%] select-none items-center gap-3 rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 shadow-sm backdrop-blur-md"
                 >
-                  {/* Audio Wave nodes */}
                   <div className="flex gap-0.5 items-end h-4 shrink-0">
-                    <div className="w-0.5 h-2 bg-cyber-cyan rounded-full animate-wave-bar" style={{ animationDelay: '0.1s' }}></div>
-                    <div className="w-0.5 h-3.5 bg-cyber-cyan rounded-full animate-wave-bar" style={{ animationDelay: '0.3s' }}></div>
-                    <div className="w-0.5 h-1.5 bg-cyber-cyan rounded-full animate-wave-bar" style={{ animationDelay: '0.0s' }}></div>
-                    <div className="w-0.5 h-3 bg-cyber-cyan rounded-full animate-wave-bar" style={{ animationDelay: '0.5s' }}></div>
+                    <div className="w-0.5 h-2 bg-indigo-500 rounded-full animate-wave-bar" style={{ animationDelay: '0.1s' }}></div>
+                    <div className="w-0.5 h-3.5 bg-sky-500 rounded-full animate-wave-bar" style={{ animationDelay: '0.3s' }}></div>
+                    <div className="w-0.5 h-1.5 bg-teal-500 rounded-full animate-wave-bar" style={{ animationDelay: '0.0s' }}></div>
+                    <div className="w-0.5 h-3 bg-violet-500 rounded-full animate-wave-bar" style={{ animationDelay: '0.5s' }}></div>
                   </div>
-                  <div className="text-[9px] text-slate-200 font-mono tracking-wide leading-tight uppercase truncate">
-                    <span className="text-cyber-cyan font-bold mr-1.5">SYS_VOICE //</span>
+                  <div className="truncate text-xs font-medium leading-tight text-slate-700">
+                    <span className="mr-1.5 font-semibold text-indigo-600">Voice</span>
                     {(() => {
                       if (lastScanDetails.success) {
                         const timeStr = lastScanDetails.scanTime;
@@ -784,71 +791,67 @@ export default function BiometricScanner() {
           />
         </motion.div>
 
-        {/* Right Panel: Holographic Geofence Radar Map */}
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, delay: 0.15 }}
-          className="w-full glass-panel rounded-2xl p-6 overflow-hidden relative flex flex-col shadow-2xl h-fit"
+          className="glass-panel-heavy scan-frame relative flex h-fit w-full flex-col overflow-hidden rounded-xl p-5 pt-6"
         >
-          <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
-          
-          <div className="flex items-center justify-between border-b border-white/5 pb-3.5 mb-5">
-            <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase flex items-center gap-2 select-none">
-              <Compass className="w-4 h-4 text-cyber-cyan" />
-              Orbital Geofence Tracker
+          <div className="spectrum-bar absolute left-0 right-0 top-0 h-1" />
+          <div className="mb-5 flex items-center justify-between border-b border-slate-200 pb-4">
+            <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <Compass className="h-4 w-4 text-indigo-600" />
+              Geofence validation
             </span>
-            <span className="text-[8px] font-mono text-slate-500 uppercase flex items-center gap-1.5 tracking-wider">
-              <span className={`w-1.5 h-1.5 rounded-full ${gpsLoading ? 'bg-cyber-cyan animate-pulse' : gpsError ? 'bg-cyber-red shadow-red-glow' : 'bg-cyber-green animate-ping shadow-green-glow'}`}></span>
-              {gpsLoading ? 'ORBITAL SEARCH' : gpsError ? 'SIGNAL LOST' : 'GPS LOCK: SECURED'}
+            <span className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+              <span className={`h-1.5 w-1.5 rounded-full ${gpsLoading ? 'bg-indigo-500 animate-pulse' : gpsError ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></span>
+              {gpsLoading ? 'Locating' : gpsError ? 'GPS issue' : 'GPS locked'}
             </span>
           </div>
 
-          {/* Dynamic Map Header Status Bar */}
-          <div className={`p-3 rounded-xl border mb-5 flex items-center justify-between font-mono ${
-            gpsLoading 
-              ? 'bg-cyber-cyan/5 border-cyber-cyan/15 text-cyber-cyan animate-pulse' 
-              : gpsError 
-              ? 'bg-cyber-red/5 border-cyber-red/15 text-cyber-red' 
-              : isInside 
-              ? 'bg-cyber-green/5 border-cyber-green/15 text-cyber-green shadow-green-glow' 
-              : 'bg-cyber-gold/5 border-cyber-gold/15 text-cyber-gold animate-pulse'
+          <div className={`mb-5 flex items-center justify-between rounded-xl border p-3 ${
+            gpsLoading
+              ? 'bg-indigo-50 border-indigo-100 text-indigo-700'
+              : gpsError
+              ? 'bg-rose-50 border-rose-100 text-rose-700'
+              : isInside
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+              : 'bg-amber-50 border-amber-100 text-amber-700'
           }`}>
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
               <MapPin className="w-4 h-4 shrink-0" />
               <div className="min-w-0">
-                <p className="text-[8px] text-slate-500 uppercase leading-none">GEOGRAPHIC SECTOR</p>
-                <h4 className="text-[10px] font-bold uppercase mt-0.5 truncate">
-                  {gpsLoading 
-                    ? 'CONNECTING GEODESIC SATELLITES...' 
-                    : gpsError 
-                    ? 'GPS HARDWARE FAULT' 
-                    : isInside 
-                    ? 'INBOUND: SECURE SECTOR' 
-                    : 'OUTBOUND: BREACH ZONE'}
+                <p className="text-xs text-slate-500 leading-none">Location status</p>
+                <h4 className="mt-1 truncate text-sm font-semibold">
+                  {gpsLoading
+                    ? 'Acquiring GPS signal'
+                    : gpsError
+                    ? 'Location permission required'
+                    : isInside
+                    ? 'Inside approved office area'
+                    : 'Outside configured boundary'}
                 </h4>
               </div>
             </div>
             <div className="text-right pl-2 shrink-0">
-              <p className="text-[8px] text-slate-500 uppercase leading-none">CLEARANCE</p>
-              <h4 className="text-[10px] font-bold uppercase mt-0.5">
-                {gpsLoading ? 'WAITING...' : gpsError ? 'FAIL' : isInside ? 'APPROVED' : 'DENIED'}
+              <p className="text-xs text-slate-500 leading-none">Access</p>
+              <h4 className="mt-1 text-sm font-semibold">
+                {gpsLoading ? 'Waiting' : gpsError ? 'Blocked' : isInside ? 'Approved' : 'Denied'}
               </h4>
             </div>
           </div>
 
-          {/* Map Viewport */}
-          <div className="h-[250px] w-full rounded-2xl overflow-hidden relative z-10 border border-white/5 bg-slate-950">
+          <div className="relative z-10 h-[250px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
             {gpsError ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-cyber-red gap-2">
-                <AlertTriangle className="w-7 h-7 text-cyber-red animate-bounce" />
-                <p className="text-[10px] uppercase font-bold tracking-widest">GPS ACQUISITION FAILED</p>
-                <p className="text-[9px] text-slate-500 leading-normal max-w-xs uppercase">{gpsError}</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-rose-600">
+                <AlertTriangle className="h-7 w-7" />
+                <p className="text-sm font-semibold">GPS acquisition failed</p>
+                <p className="max-w-xs text-xs leading-normal text-slate-500">{gpsError}</p>
               </div>
             ) : gpsLoading ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 gap-2">
-                <RefreshCw className="w-6 h-6 text-cyber-cyan animate-spin" />
-                <p className="text-[9px] uppercase font-bold tracking-widest text-slate-500">PINGING SATELLITES...</p>
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-500">
+                <RefreshCw className="h-6 w-6 animate-spin text-indigo-600" />
+                <p className="text-sm font-medium text-slate-500">Finding location...</p>
               </div>
             ) : (
               <>
@@ -871,7 +874,7 @@ export default function BiometricScanner() {
                   <Marker position={officeCoords} icon={officeIcon}>
                     <Popup>
                       <div className="font-mono text-[9px] leading-normal text-slate-900">
-                        <p className="font-bold">HEADQUARTERS CENTER</p>
+                        <p className="font-bold">Headquarters</p>
                         <p>Geofence Radius: {geofenceRadius}m</p>
                       </div>
                     </Popup>
@@ -905,74 +908,71 @@ export default function BiometricScanner() {
 
                   {/* Employee Live Position Marker */}
                   {userCoords && (
-                    <Marker 
-                      position={[userCoords.latitude, userCoords.longitude]} 
+                    <Marker
+                      position={[userCoords.latitude, userCoords.longitude]}
                       icon={isInside ? employeeIcon : employeeOutsideIcon}
                     >
                       <Popup>
                         <div className="font-mono text-[9px] leading-normal text-slate-900">
-                          <p className="font-bold">YOUR LIVE POSITION</p>
+                          <p className="font-bold">Your live position</p>
                           <p>Distance: {distanceToOffice !== null ? `${Math.round(distanceToOffice)}m` : 'Calculating...'}</p>
-                          <p>Zone: {isInside ? 'INSIDE ZONE' : 'OUTSIDE ZONE'}</p>
+                          <p>Zone: {isInside ? 'Inside zone' : 'Outside zone'}</p>
                         </div>
                       </Popup>
                     </Marker>
                   )}
                 </MapContainer>
 
-                {/* Cyberpunk Radar Conic-gradient sweeping animation overlay */}
                 <div className="absolute inset-0 z-20 pointer-events-none overflow-hidden rounded-2xl">
-                  <div 
-                    className="absolute w-[200%] h-[200%] top-[-50%] left-[-50%] bg-[conic-gradient(from_0deg,transparent_60%,rgba(6,182,212,0.035)_100%)] rounded-full animate-spin pointer-events-none"
+                  <div
+                    className="absolute w-[200%] h-[200%] top-[-50%] left-[-50%] bg-[conic-gradient(from_0deg,transparent_70%,rgba(79,70,229,0.045)_100%)] rounded-full animate-spin pointer-events-none"
                     style={{ animationDuration: '8s' }}
                   ></div>
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(6,182,212,0.02)_0%,transparent_75%)]"></div>
-                  <div className="absolute top-1/2 left-0 w-full h-[0.5px] bg-cyber-cyan/10"></div>
-                  <div className="absolute left-1/2 top-0 h-full w-[0.5px] bg-cyber-cyan/10"></div>
+                  <div className="absolute top-1/2 left-0 w-full h-px bg-indigo-500/10"></div>
+                  <div className="absolute left-1/2 top-0 h-full w-px bg-indigo-500/10"></div>
                 </div>
               </>
             )}
           </div>
 
-          {/* Telemetry Digital HUD Stats */}
-          <div className="mt-4 bg-[#050811] border border-white/5 rounded-xl p-4 text-[9px] space-y-2 select-none text-slate-500 font-mono">
-            <div className="flex justify-between border-b border-white/[0.03] pb-1.5">
-              <span>SECURE ZONE CENTER:</span>
-              <span className="text-slate-300 font-bold">{officeCoords[0].toFixed(5)}N / {officeCoords[1].toFixed(5)}E</span>
+          <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs text-slate-500">
+            <div className="flex justify-between gap-3 border-b border-slate-200 pb-2">
+              <span>Office center</span>
+              <span className="font-medium text-slate-900">{officeCoords[0].toFixed(5)}, {officeCoords[1].toFixed(5)}</span>
             </div>
-            <div className="flex justify-between border-b border-white/[0.03] pb-1.5">
-              <span>SUBJECT POSITION:</span>
+            <div className="flex justify-between gap-3 border-b border-slate-200 pb-2">
+              <span>Your position</span>
               <span className={userCoords ? 'text-slate-350' : 'text-cyber-red animate-pulse font-bold'}>
-                {userCoords 
-                  ? `${userCoords.latitude.toFixed(5)}N / ${userCoords.longitude.toFixed(5)}E` 
-                  : 'LOCKING SENSOR COORDINATES...'}
+                {userCoords
+                  ? `${userCoords.latitude.toFixed(5)}, ${userCoords.longitude.toFixed(5)}`
+                  : 'Waiting for GPS'}
               </span>
             </div>
-            <div className="flex justify-between border-b border-white/[0.03] pb-1.5">
-              <span>RADIAL DEVIATION:</span>
+            <div className="flex justify-between gap-3 border-b border-slate-200 pb-2">
+              <span>Distance</span>
               <span className={distanceToOffice !== null ? isInside ? 'text-cyber-green font-bold text-glow-green' : 'text-cyber-red font-bold' : ''}>
-                {distanceToOffice !== null 
-                  ? `${distanceToOffice.toFixed(1)} METERS` 
-                  : 'GPS SCANNING...'}
+                {distanceToOffice !== null
+                  ? `${distanceToOffice.toFixed(1)} m`
+                  : 'Calculating'}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span>VALIDATION BOUNDARY:</span>
-              <span className="text-cyber-cyan">{geofenceRadius} METERS</span>
+            <div className="flex justify-between gap-3">
+              <span>Allowed radius</span>
+              <span className="font-medium text-indigo-600">{geofenceRadius} m</span>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Dynamic Informative Readout Footer Bar */}
-      <div className="max-w-7xl mx-auto bg-slate-950/20 rounded-xl p-4 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-3 text-[9px] text-slate-500 text-center md:text-left select-none uppercase font-mono tracking-wider">
+      <div className="glass-panel-heavy relative mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 overflow-hidden rounded-xl p-4 pt-5 text-center text-xs text-slate-500 md:flex-row md:text-left">
+        <div className="spectrum-bar absolute left-0 right-0 top-0 h-1" />
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-cyber-cyan animate-pulse" />
-          <span>Biometric & GPS Gateway Status: <span className="text-cyber-green font-bold">NOMINAL</span></span>
+          <Activity className="h-4 w-4 text-indigo-600" />
+          <span>Biometric and GPS services: <span className="font-semibold text-emerald-600">Operational</span></span>
         </div>
-        <div className="flex items-center gap-1 font-bold">
-          <Globe className="w-3.5 h-3.5 text-cyber-cyan animate-pulse" />
-          <span>GPS COORDINATE MONITOR ENGAGED</span>
+        <div className="flex items-center gap-1 font-medium">
+          <Globe className="h-3.5 w-3.5 text-sky-600" />
+          <span>Location monitor enabled</span>
         </div>
       </div>
     </motion.div>

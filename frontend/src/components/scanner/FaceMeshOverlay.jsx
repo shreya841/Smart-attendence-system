@@ -13,9 +13,9 @@ export default function FaceMeshOverlay({ canvasRef, cooldownState }) {
         id="biometric-canvas-overlay"
       />
       
-      {/* Glowing neon vertical Laser Scan Line */}
+      {/* Subtle scan line */}
       {!cooldownState && (
-        <div className="absolute left-0 w-full h-0.5 bg-cyber-cyan/85 shadow-[0_0_15px_#00F0FF] animate-scan-line pointer-events-none z-10"></div>
+        <div className="absolute left-0 z-10 h-0.5 w-full bg-indigo-500/70 animate-scan-line pointer-events-none"></div>
       )}
     </>
   );
@@ -28,10 +28,9 @@ export default function FaceMeshOverlay({ canvasRef, cooldownState }) {
 export const drawCustomDetections = (ctx, detection, isLocked) => {
   const { x, y, width, height } = detection.detection.box;
   
-  ctx.strokeStyle = isLocked ? '#10B981' : '#00F0FF';
-  ctx.lineWidth = 3;
-  ctx.shadowColor = isLocked ? '#10B981' : '#00F0FF';
-  ctx.shadowBlur = 12;
+  ctx.strokeStyle = isLocked ? '#10B981' : '#4F46E5';
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 0;
   
   const cornerLength = Math.min(width, height) * 0.15;
   
@@ -73,8 +72,8 @@ export const drawCustomDetections = (ctx, detection, isLocked) => {
 export const drawCustomMesh = (ctx, landmarks, isLocked) => {
   const points = landmarks.positions;
   
-  ctx.fillStyle = isLocked ? '#10B981' : '#00F0FF';
-  ctx.strokeStyle = isLocked ? 'rgba(16, 185, 129, 0.25)' : 'rgba(0, 240, 255, 0.2)';
+  ctx.fillStyle = isLocked ? '#10B981' : '#4F46E5';
+  ctx.strokeStyle = isLocked ? 'rgba(16, 185, 129, 0.25)' : 'rgba(79, 70, 229, 0.22)';
   ctx.lineWidth = 1;
   
   // Draw dots
@@ -111,14 +110,14 @@ export const drawCustomMesh = (ctx, landmarks, isLocked) => {
  * Draws tracking lines and center scopes when scanning.
  */
 export const drawScanningCrosshairs = (ctx, width, height) => {
-  ctx.strokeStyle = 'rgba(0, 240, 255, 0.15)';
+  ctx.strokeStyle = 'rgba(79, 70, 229, 0.18)';
   ctx.lineWidth = 1.5;
 
   ctx.beginPath();
   ctx.arc(width / 2, height / 2, 60, 0, 2 * Math.PI);
   ctx.stroke();
 
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.2)';
+  ctx.fillStyle = 'rgba(79, 70, 229, 0.22)';
   ctx.beginPath();
   ctx.arc(width / 2, height / 2, 4, 0, 2 * Math.PI);
   ctx.fill();
@@ -134,12 +133,9 @@ export const drawScanningCrosshairs = (ctx, width, height) => {
   ctx.stroke();
 
   if (Math.floor(Date.now() / 600) % 2 === 0) {
-    ctx.fillStyle = '#00F0FF';
-    ctx.font = '10px Courier New';
+    ctx.fillStyle = '#4F46E5';
+    ctx.font = '10px Inter, Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#00F0FF';
-    ctx.shadowBlur = 4;
-    ctx.fillText('BIOMETRIC SCANNERS ENGAGED: ALIGN FACE', width / 2, height / 2 + 85);
-    ctx.shadowBlur = 0;
+    ctx.fillText('Align face for verification', width / 2, height / 2 + 85);
   }
 };

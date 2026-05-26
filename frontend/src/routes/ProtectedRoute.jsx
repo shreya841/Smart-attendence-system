@@ -9,10 +9,10 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
   // This prevents the race where a valid session temporarily appears as unauthenticated
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-cyber-bg">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-[10px] font-mono tracking-widest text-slate-500 uppercase animate-pulse">
+          <div className="h-10 w-10 rounded-full border-2 border-indigo-200 border-t-indigo-600 animate-spin"></div>
+          <p className="text-sm font-medium text-slate-500">
             Restoring session...
           </p>
         </div>

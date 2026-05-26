@@ -418,7 +418,7 @@ export default function AdminPanel() {
       ctx.save();
 
       // Determine glow colors based on current liveness state
-      let glowColor = '#06B6D4'; // default cyber-cyan
+      let glowColor = '#06B6D4'; // default accent color
       let glowBg = 'rgba(6, 182, 212, 0.4)';
       let meshColor = 'rgba(6, 182, 212, 0.15)';
       
@@ -481,7 +481,7 @@ export default function AdminPanel() {
       ctx.strokeRect(box.x, box.y, box.width, box.height);
       ctx.shadowBlur = 0; // Reset shadow
 
-      // --- Rotating cybernetic target reticle ring ---
+      // --- Subtle rotating target reticle ring ---
       const boxCenterX = box.x + box.width / 2;
       const boxCenterY = box.y + box.height / 2;
       const radius = Math.max(box.width, box.height) * 0.62;
@@ -1778,7 +1778,7 @@ export default function AdminPanel() {
             {loading ? (
               <div className="py-20 flex flex-col items-center justify-center">
                 <div className="w-8 h-8 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-xs font-mono text-slate-500 mt-4 animate-pulse">PULLING DATABASE SCHEMAS...</p>
+                <p className="text-xs font-mono text-slate-500 mt-4 animate-pulse">Loading employee records...</p>
               </div>
             ) : filteredEmployees.length === 0 ? (
               <div className="py-20 text-center flex flex-col items-center justify-center font-mono">
@@ -1793,7 +1793,7 @@ export default function AdminPanel() {
                       <th className="pb-3 font-bold uppercase tracking-wider">Employee ID</th>
                       <th className="pb-3 font-bold uppercase tracking-wider">Name</th>
                       <th className="pb-3 font-bold uppercase tracking-wider">Email Address</th>
-                      <th className="pb-3 font-bold uppercase tracking-wider">Enclave Role</th>
+                      <th className="pb-3 font-bold uppercase tracking-wider">Access Role</th>
                       <th className="pb-3 font-bold uppercase tracking-wider">Department</th>
                       <th className="pb-3 font-bold uppercase tracking-wider text-center">Face registered</th>
                       <th className="pb-3 font-bold uppercase tracking-wider">Coordinates status</th>
@@ -2399,7 +2399,7 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
-                {/* Sandbox simulated enclave option (Fully functional) */}
+                {/* Sandbox simulated location option (fully functional) */}
                 {biometricTargetEmp && (
                   <div className="border-t border-white/5 pt-3 mt-4 flex flex-col gap-1.5">
                     <label className="block text-[8px] font-bold text-slate-500 uppercase">
@@ -2513,7 +2513,7 @@ export default function AdminPanel() {
             {loadingSettings ? (
               <div className="py-20 flex flex-col items-center justify-center font-mono">
                 <div className="w-8 h-8 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-xs text-slate-500 mt-4 animate-pulse">LOADING GEOFENCE SCHEMAS...</p>
+                <p className="text-xs text-slate-500 mt-4 animate-pulse">Loading geofence workspace...</p>
               </div>
             ) : (
               <div className="space-y-5 font-mono">
@@ -2817,7 +2817,7 @@ export default function AdminPanel() {
                       {gpsDetecting ? (
                         <>
                           <div className="w-12 h-12 border-2 border-cyber-cyan border-t-transparent rounded-full animate-spin mb-4" />
-                          <p className="text-xs font-bold text-cyber-cyan font-mono uppercase">Acquiring Satellite Signal...</p>
+                          <p className="text-xs font-bold text-cyber-cyan font-mono uppercase">Acquiring GPS Signal...</p>
                           <p className="text-[10px] text-slate-500 mt-2">Connecting to GPS network</p>
                         </>
                       ) : (
@@ -3370,13 +3370,13 @@ export default function AdminPanel() {
             </p>
 
             <div className="bg-cyber-red/10 border border-cyber-red/20 rounded-xl p-3.5 mb-4 text-xs font-mono space-y-1">
-              <div className="text-slate-200 font-bold uppercase text-[11px]">OPERATION: {
+              <div className="text-slate-200 font-bold uppercase text-[11px]">Action: {
                 confirmAction === 'reset-db' ? 'FACTORY RESET SYSTEM' :
                 confirmAction === 'clear-attendance' ? 'WIPE ATTENDANCE LEDGER' :
                 confirmAction === 'clear-logs' ? 'PURGE ACTIVITY LOGS' :
                 confirmAction === 'reset-face' ? `ERASE FACE TEMPLATE FOR ${confirmTarget?.name}` : 'UNKNOWN DESTRUCTIVE OPERATION'
               }</div>
-              <div className="text-slate-400 uppercase text-[9px]">Scope: sqlite database transaction, permanent change.</div>
+              <div className="text-slate-400 uppercase text-[9px]">Scope: permanent database change.</div>
             </div>
 
             <form onSubmit={handleConfirmAdminAction} className="space-y-4 font-mono">

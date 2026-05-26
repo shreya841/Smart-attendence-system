@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, RefreshCw } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Home } from 'lucide-react';
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -12,7 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('[CRITICAL MATRIX EXCEPTION DETECTED]:', error, errorInfo);
+    console.error('[RENDER ERROR]:', error, errorInfo);
   }
 
   handleReset = () => {
@@ -27,41 +27,31 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="glass-panel border-cyber-red/20 rounded-2xl p-8 max-w-2xl mx-auto my-12 text-center relative overflow-hidden font-mono bg-slate-950/80 backdrop-blur-md">
-          <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-red to-transparent"></div>
-          
-          <div className="w-16 h-16 bg-cyber-red/10 border border-cyber-red/30 rounded-full flex items-center justify-center mx-auto mb-6 shadow-red-glow">
-            <ShieldAlert className="w-8 h-8 text-cyber-red animate-pulse" />
+        <div className="glass-panel-heavy mx-auto my-12 max-w-2xl rounded-xl p-8 text-center">
+          <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600">
+            <ShieldAlert className="h-7 w-7" />
           </div>
-          
-          <h3 className="text-sm font-bold tracking-widest text-white uppercase mb-2">
-            CRITICAL ENCLAVE FAULT DETECTED
-          </h3>
-          
-          <p className="text-[10px] text-slate-400 uppercase mb-6 leading-relaxed max-w-md mx-auto">
-            The neural render-tree encountered an unexpected thread exception. Operational systems have isolated the fault enclave.
+
+          <h3 className="text-lg font-semibold text-slate-900">Something went wrong</h3>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
+            The interface hit an unexpected render error. You can retry the view or return to the dashboard.
           </p>
-          
-          <div className="bg-slate-950/90 border border-white/5 rounded-xl p-4 text-left text-xs mb-6 max-h-48 overflow-y-auto text-cyber-red/90 custom-scrollbar">
-            <p className="font-bold border-b border-white/5 pb-2 mb-2 uppercase text-[9px] text-slate-500 tracking-wider">Error Report Matrix:</p>
-            <pre className="whitespace-pre-wrap font-mono text-[10px] leading-relaxed">
-              {this.state.error?.stack || this.state.error?.toString() || 'Unknown Runtime Exception'}
+
+          <div className="mt-6 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4 text-left text-xs text-rose-700">
+            <p className="mb-2 border-b border-slate-200 pb-2 font-semibold text-slate-500">Error details</p>
+            <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
+              {this.state.error?.stack || this.state.error?.toString() || 'Unknown runtime exception'}
             </pre>
           </div>
-          
-          <div className="flex justify-center gap-4">
-            <button
-              onClick={this.handleReset}
-              className="inline-flex items-center gap-2 bg-cyber-red/20 border border-cyber-red/40 hover:bg-cyber-red/30 text-cyber-red text-xs font-bold py-2.5 px-6 rounded-xl uppercase tracking-wider transition-all cursor-pointer shadow-red-glow"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Hot-Reload Enclave
+
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <button onClick={this.handleReset} className="ui-button border border-rose-100 bg-rose-50 text-rose-700 hover:bg-rose-100">
+              <RefreshCw className="h-4 w-4" />
+              Retry
             </button>
-            
-            <button
-              onClick={() => window.location.href = '/dashboard'}
-              className="inline-flex items-center gap-2 bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 text-xs font-bold py-2.5 px-6 rounded-xl uppercase tracking-wider transition-all cursor-pointer"
-            >
-              Return Home
+            <button onClick={() => { window.location.href = '/dashboard'; }} className="ui-button ui-button-secondary">
+              <Home className="h-4 w-4" />
+              Return home
             </button>
           </div>
         </div>

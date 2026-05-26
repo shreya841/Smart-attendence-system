@@ -3,11 +3,10 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTheme } from '../context/ThemeContext.jsx';
 import { apiCall } from '../services/api.js';
-import { MapContainer, TileLayer, Circle, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { MapPin, Navigation, Compass, AlertTriangle, CheckCircle, HelpCircle } from 'lucide-react';
+import { MapPin, Compass, CheckCircle, HelpCircle, Move, LocateFixed } from 'lucide-react';
 
-// Helper to dynamic pan/re-center Leaflet maps on coordinates state changes
 function ChangeMapView({ center }) {
   const map = useMap();
   useEffect(() => {
@@ -15,10 +14,7 @@ function ChangeMapView({ center }) {
     try {
       const container = map.getContainer();
       if (!container) return;
-      
-      if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) {
-        map.setView(center, map.getZoom());
-      }
+      if (center && center[0] && center[1] && !isNaN(center[0]) && !isNaN(center[1])) map.setView(center, map.getZoom());
     } catch (e) {
       console.warn('[ChangeMapView Cleanup Guard]: Map is unmounted.', e);
     }
@@ -26,7 +22,6 @@ function ChangeMapView({ center }) {
   return null;
 }
 
-// Setup beautiful custom pins so they don't break in standard Vite layouts
 const officeIcon = new L.Icon({
   iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -48,23 +43,15 @@ const employeeIcon = new L.Icon({
 export default function GeofenceSandbox() {
   const { user } = useAuth();
   const { theme } = useTheme();
-  
   const mapTileUrl = theme === 'dark'
-    ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-  
-  // Dynamic settings state
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [officeCoords, setOfficeCoords] = useState([28.6139, 77.2090]);
-  const [geofenceRadius, setGeofenceRadius] = useState(50); // meters
-
-  // Current employee coordinates (Draggable)
+  const [geofenceRadius, setGeofenceRadius] = useState(50);
   const [empCoords, setEmpCoords] = useState([28.6142, 77.2093]);
-  const [telemetry, setTelemetry] = useState({
-    distance: 0,
-    status: 'Outside Office',
-    transition: null
-  });
+  const [telemetry, setTelemetry] = useState({ distance: 0, status: 'Outside Office', transition: null });
   const [updating, setUpdating] = useState(false);
   const markerRef = useRef(null);
   const isComponentMounted = useRef(true);
@@ -74,7 +61,6 @@ export default function GeofenceSandbox() {
     return () => {
       if (mapRef.current) {
         try {
-          console.log('[GeofenceSandbox Cleanup]: Explicitly removing Leaflet map instance...');
           mapRef.current.remove();
           mapRef.current = null;
         } catch (e) {
@@ -84,16 +70,11 @@ export default function GeofenceSandbox() {
     };
   }, []);
 
-  // Syncs and updates coordinate updates with backend REST services
   const syncCoordinates = async (lat, lng) => {
     if (!user) return;
     if (isComponentMounted.current) setUpdating(true);
     try {
-      const response = await apiCall(`/employees/${user?.id}/coordinates`, 'POST', {
-        latitude: lat,
-        longitude: lng
-      });
-
+      const response = await apiCall(`/employees/${user?.id}/coordinates`, 'POST', { latitude: lat, longitude: lng });
       if (response.success && isComponentMounted.current) {
         setTelemetry({
           distance: response.data.distance,
@@ -108,7 +89,6 @@ export default function GeofenceSandbox() {
     }
   };
 
-  // Run initial sync and load settings from database
   useEffect(() => {
     isComponentMounted.current = true;
     if (!user) return;
@@ -116,10 +96,7 @@ export default function GeofenceSandbox() {
     const initSandbox = async () => {
       try {
         const response = await apiCall('/settings', 'GET');
-        // Guard: abort if user navigated away
         if (controller.signal.aborted || !isComponentMounted.current) return;
-        // CRITICAL FIX: Always use Number() to force numeric coercion.
-        // Supabase returns settings as strings — string + 0.0003 = concatenation!
         let lat = 28.6139;
         let lng = 77.2090;
         let radius = 50;
@@ -127,18 +104,14 @@ export default function GeofenceSandbox() {
           lat = Number(response.settings.geofence_lat) || 28.6139;
           lng = Number(response.settings.geofence_lng) || 77.2090;
           radius = Number(response.settings.geofence_radius) || 50;
-          if (isComponentMounted.current) {
-            setOfficeCoords([lat, lng]);
-            setGeofenceRadius(radius);
-          }
+          setOfficeCoords([lat, lng]);
+          setGeofenceRadius(radius);
         }
-        // Explicit Number() arithmetic — prevents string concatenation
         const initialEmp = [Number(lat) + 0.0003, Number(lng) + 0.0003];
-        if (isComponentMounted.current) setEmpCoords(initialEmp);
+        setEmpCoords(initialEmp);
         await syncCoordinates(initialEmp[0], initialEmp[1]);
       } catch (err) {
-        if (controller.signal.aborted) return; // Intentional abort, ignore
-        console.error('[SETTINGS FETCH ERROR]:', err);
+        if (!controller.signal.aborted) console.error('[SETTINGS FETCH ERROR]:', err);
       } finally {
         if (isComponentMounted.current) setLoadingSettings(false);
       }
@@ -150,241 +123,141 @@ export default function GeofenceSandbox() {
     };
   }, [user]);
 
-  // Drag handler for leaflet marker
   const handleMarkerDragEnd = () => {
     const marker = markerRef.current;
-    if (marker) {
-      const { lat, lng } = marker.getLatLng();
-      const newCoords = [parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6))];
-      setEmpCoords(newCoords);
-      syncCoordinates(newCoords[0], newCoords[1]);
-    }
+    if (!marker) return;
+    const { lat, lng } = marker.getLatLng();
+    const newCoords = [parseFloat(lat.toFixed(6)), parseFloat(lng.toFixed(6))];
+    setEmpCoords(newCoords);
+    syncCoordinates(newCoords[0], newCoords[1]);
   };
 
-  // Teleport Helpers to test boundary checks instantly
   const teleportInside = () => {
-    const insideCoords = [officeCoords[0] + 0.00002, officeCoords[1] + 0.00002]; // Very close to center
+    const insideCoords = [officeCoords[0] + 0.00002, officeCoords[1] + 0.00002];
     setEmpCoords(insideCoords);
     syncCoordinates(insideCoords[0], insideCoords[1]);
   };
 
   const teleportOutside = () => {
-    const outsideCoords = [officeCoords[0] + 0.0016, officeCoords[1] + 0.002]; // Way out
+    const outsideCoords = [officeCoords[0] + 0.0016, officeCoords[1] + 0.002];
     setEmpCoords(outsideCoords);
     syncCoordinates(outsideCoords[0], outsideCoords[1]);
   };
 
+  const inside = telemetry.status === 'Inside Office';
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-      className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-    >
-      {/* Interactive Map Visual Panel */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="glass-panel rounded-2xl p-4 overflow-hidden relative flex flex-col">
-          <div className="absolute top-0 left-0 w-full h-[1.5px] bg-gradient-to-r from-transparent via-cyber-cyan to-transparent"></div>
-          
-          <div className="flex items-center justify-between border-b border-white/5 pb-3 mb-4">
-            <span className="text-xs font-mono font-bold tracking-widest text-white uppercase flex items-center gap-2">
-              <Compass className="w-4 h-4 text-cyber-cyan animate-spin" />
-              Dynamic Orbital Geofence Mapper (Leaflet Sandbox)
-            </span>
-            <span className="text-[9px] font-mono text-slate-500 uppercase">Interactive Draggable Enclave</span>
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="glass-panel-heavy overflow-hidden rounded-xl lg:col-span-2">
+        <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg border border-sky-100 bg-sky-50 p-2 text-sky-700">
+              <Compass className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Geofence sandbox</h2>
+              <p className="text-xs text-slate-500">Drag the employee marker to test boundary updates.</p>
+            </div>
           </div>
+          <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+            <Move className="h-3.5 w-3.5" />
+            Interactive map
+          </span>
+        </div>
 
-          {/* Leaflet map container */}
-          <div className="h-[400px] w-full rounded-2xl overflow-hidden relative z-10 border border-white/10">
+        <div className="p-4">
+          <div className="h-[420px] w-full overflow-hidden rounded-xl border border-slate-200">
             {loadingSettings ? (
-              <div className="h-full w-full flex items-center justify-center bg-slate-950/40 text-slate-400 font-mono text-xs uppercase">
-                Loading Office Location Settings...
-              </div>
+              <div className="flex h-full w-full items-center justify-center bg-slate-50 text-sm text-slate-500">Loading office location...</div>
             ) : (
-              <MapContainer
-                key="sandbox-geofence-map-static"
-                ref={mapRef}
-                center={officeCoords}
-                zoom={17}
-                scrollWheelZoom={true}
-                className="h-full w-full"
-              >
+              <MapContainer key="sandbox-geofence-map-static" ref={mapRef} center={officeCoords} zoom={17} scrollWheelZoom className="h-full w-full">
                 <ChangeMapView center={officeCoords} />
-                {/* Modern Cyber Dark Map Tiles */}
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url={mapTileUrl}
-                />
-
-                {/* Glowing Neon Geofence Circle Boundary */}
-                <Circle
-                  center={officeCoords}
-                  radius={geofenceRadius}
-                  pathOptions={{
-                    color: telemetry.status === 'Inside Office' ? '#10B981' : '#06B6D4',
-                    fillColor: telemetry.status === 'Inside Office' ? '#10B981' : '#06B6D4',
-                    fillOpacity: 0.12,
-                    weight: 2,
-                    dashArray: '5, 10'
-                  }}
-                />
-
-                {/* Central Office Hub Marker */}
+                <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>' url={mapTileUrl} />
+                <Circle center={officeCoords} radius={geofenceRadius} pathOptions={{ color: inside ? '#10B981' : '#3B82F6', fillColor: inside ? '#10B981' : '#3B82F6', fillOpacity: 0.12, weight: 2, dashArray: '5, 10' }} />
                 <Marker position={officeCoords} icon={officeIcon}>
                   <Popup>
-                    <div className="font-mono text-xs text-slate-900 leading-normal">
-                      <p className="font-bold">Headquarters Enclave</p>
-                      <p className="text-[10px]">Radius Threshold: {geofenceRadius}m</p>
+                    <div className="text-xs leading-normal text-slate-900">
+                      <p className="font-semibold">Headquarters</p>
+                      <p>Radius: {geofenceRadius}m</p>
                     </div>
                   </Popup>
                 </Marker>
-
-                {/* Draggable Employee Position Pin */}
-                <Marker
-                  position={empCoords}
-                  draggable={true}
-                  eventHandlers={{ dragend: handleMarkerDragEnd }}
-                  ref={markerRef}
-                  icon={employeeIcon}
-                >
+                <Marker position={empCoords} draggable eventHandlers={{ dragend: handleMarkerDragEnd }} ref={markerRef} icon={employeeIcon}>
                   <Popup>
-                    <div className="font-mono text-xs text-slate-900 leading-normal">
-                      <p className="font-bold">Your Location Pin</p>
-                      <p className="text-[10px]">DRAG PIN TO SIMULATE WALKING</p>
+                    <div className="text-xs leading-normal text-slate-900">
+                      <p className="font-semibold">Employee location</p>
+                      <p>Drag to simulate movement</p>
                     </div>
                   </Popup>
                 </Marker>
               </MapContainer>
             )}
           </div>
-          
-          <div className="mt-3 text-[10px] font-mono text-slate-500 flex items-center gap-1.5 uppercase leading-normal">
-            <HelpCircle className="w-3.5 h-3.5" />
-            Click and drag the RED pin on the map to simulate real-time employee movements and check geofence calculations.
+
+          <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+            <HelpCircle className="h-3.5 w-3.5" />
+            Drag the employee pin or use quick actions to recalculate office boundary status.
           </div>
         </div>
       </div>
 
-      {/* Geofence Telemetry Stats Panel */}
       <div className="space-y-4">
-        {/* Real-time coordinates telemetry readout */}
-        <div className="glass-panel rounded-2xl p-5 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyber-cyan/30 to-transparent"></div>
-          <h3 className="text-sm font-bold font-mono tracking-widest text-white uppercase mb-4 flex items-center gap-2">
-            🛰️ Geofence Coordinates Telemetry
-          </h3>
-
-          <div className="space-y-4">
-            {/* Status read-out box */}
-            <div className={`p-4 rounded-xl border flex items-center gap-3.5 ${
-              telemetry.status === 'Inside Office' 
-                ? 'bg-cyber-green/10 border-cyber-green/20 text-cyber-green shadow-green-glow'
-                : 'bg-cyber-blue/10 border-cyber-blue/20 text-cyber-blue'
-            }`}>
-              <div className="p-2 bg-black/20 rounded-lg">
-                <MapPin className="w-5 h-5 animate-bounce" />
-              </div>
-              <div>
-                <p className="text-[9px] font-mono text-slate-500 uppercase tracking-widest leading-none">CURRENT GEOGRAPHIC STATE</p>
-                <h4 className="text-sm font-bold uppercase tracking-wider mt-1">{telemetry.status}</h4>
-              </div>
+        <div className="glass-panel-heavy rounded-xl p-5">
+          <div className={`flex items-center gap-3 rounded-xl border p-4 ${inside ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-sky-100 bg-sky-50 text-sky-700'}`}>
+            <div className="rounded-lg bg-white/70 p-2">
+              <MapPin className="h-5 w-5" />
             </div>
-
-            {/* Calculations layout list */}
-            <div className="border-t border-white/5 pt-4 space-y-3 text-[11px] font-mono text-slate-400">
-              <div className="flex justify-between">
-                <span>RADIAL RADIUS METERS:</span>
-                <span className="text-white font-bold">{telemetry.distance.toFixed(1)}m / {geofenceRadius.toFixed(1)}m</span>
-              </div>
-              <div className="flex justify-between">
-                <span>COORDINATES ACCURACY:</span>
-                <span className="text-slate-300">GPS STABLE</span>
-              </div>
-              <div className="flex justify-between">
-                <span>LATITUDE RAW:</span>
-                <span className="text-slate-300">{empCoords[0]}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>LONGITUDE RAW:</span>
-                <span className="text-slate-300">{empCoords[1]}</span>
-              </div>
+            <div>
+              <p className="text-xs font-medium text-slate-500">Current status</p>
+              <h3 className="mt-1 text-sm font-semibold">{telemetry.status}</h3>
             </div>
+          </div>
 
-            {/* Teleport simulation triggers */}
-            <div className="border-t border-white/5 pt-4 space-y-2">
-              <span className="block text-[10px] font-mono text-slate-500 uppercase mb-2">Simulate Boundary Jumps</span>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={teleportInside}
-                  disabled={updating}
-                  className="flex items-center justify-center gap-1.5 bg-cyber-green/10 hover:bg-cyber-green/20 border border-cyber-green/20 text-cyber-green text-xs font-bold py-2.5 px-3 rounded-xl uppercase tracking-wider transition-all hover:shadow-green-glow cursor-pointer disabled:opacity-50"
-                >
-                  Jump Inside
-                </button>
-                <button
-                  onClick={teleportOutside}
-                  disabled={updating}
-                  className="flex items-center justify-center gap-1.5 bg-cyber-cyan/10 hover:bg-cyber-cyan/20 border border-cyber-cyan/20 text-cyber-cyan text-xs font-bold py-2.5 px-3 rounded-xl uppercase tracking-wider transition-all hover:shadow-cyan-glow cursor-pointer disabled:opacity-50"
-                >
-                  Jump Outside
-                </button>
-              </div>
+          <div className="mt-5 space-y-3 border-t border-slate-200 pt-4 text-sm">
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Distance</span>
+              <span className="font-medium text-slate-900">{telemetry.distance.toFixed(1)}m / {geofenceRadius.toFixed(1)}m</span>
             </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Latitude</span>
+              <span className="font-medium text-slate-900">{empCoords[0]}</span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-slate-500">Longitude</span>
+              <span className="font-medium text-slate-900">{empCoords[1]}</span>
+            </div>
+          </div>
 
-            {/* Manual Coordinates Editor */}
-            <div className="border-t border-white/5 pt-4 space-y-3">
-              <span className="block text-[10px] font-mono text-slate-500 uppercase">Manually Edit GPS Coordinates</span>
-              
-              <div className="grid grid-cols-2 gap-3 font-mono">
-                <div>
-                  <label className="block text-[8px] text-slate-500 uppercase mb-1">LATITUDE</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={empCoords[0]}
-                    onChange={(e) => {
-                      const lat = parseFloat(e.target.value) || 0;
-                      const newCoords = [lat, empCoords[1]];
-                      setEmpCoords(newCoords);
-                      syncCoordinates(newCoords[0], newCoords[1]);
-                    }}
-                    className="w-full glass-input py-1.5 px-2.5 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[8px] text-slate-500 uppercase mb-1">LONGITUDE</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={empCoords[1]}
-                    onChange={(e) => {
-                      const lng = parseFloat(e.target.value) || 0;
-                      const newCoords = [empCoords[0], lng];
-                      setEmpCoords(newCoords);
-                      syncCoordinates(newCoords[0], newCoords[1]);
-                    }}
-                    className="w-full glass-input py-1.5 px-2.5 text-xs text-white"
-                  />
-                </div>
-              </div>
-              <p className="text-[8px] text-cyan-400 uppercase leading-normal">
-                ⚡ Type coordinates above to teleport the map pin and recalculate the geofence instantly!
-              </p>
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4">
+            <button onClick={teleportInside} disabled={updating} className="ui-button border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+              <LocateFixed className="h-4 w-4" />
+              Inside
+            </button>
+            <button onClick={teleportOutside} disabled={updating} className="ui-button border border-sky-100 bg-sky-50 text-sky-700 hover:bg-sky-100">
+              <MapPin className="h-4 w-4" />
+              Outside
+            </button>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 border-t border-slate-200 pt-4">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Latitude</label>
+              <input type="number" step="0.0001" value={empCoords[0]} onChange={(e) => { const lat = parseFloat(e.target.value) || 0; const next = [lat, empCoords[1]]; setEmpCoords(next); syncCoordinates(next[0], next[1]); }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">Longitude</label>
+              <input type="number" step="0.0001" value={empCoords[1]} onChange={(e) => { const lng = parseFloat(e.target.value) || 0; const next = [empCoords[0], lng]; setEmpCoords(next); syncCoordinates(next[0], next[1]); }} />
             </div>
           </div>
         </div>
 
-        {/* Transition status logger notifications */}
         {telemetry.transition && (
-          <div className="glass-panel rounded-2xl p-5 border border-cyber-green/20 bg-cyber-green/5 relative overflow-hidden animate-slide-in">
+          <div className="glass-panel rounded-xl border border-emerald-100 bg-emerald-50 p-5">
             <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-cyber-green shrink-0 mt-0.5 animate-pulse" />
+              <CheckCircle className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
               <div>
-                <h5 className="text-xs font-bold text-cyber-green uppercase tracking-wider">GEOFENCE AUTOMATED LOG EVENT</h5>
-                <p className="text-[10.5px] text-slate-300 mt-1 leading-normal uppercase">
-                  Subject triggered boundary shift: <span className="font-bold text-white">{telemetry.transition}</span>
-                </p>
-                <p className="text-[9px] text-slate-500 mt-1 uppercase">LOGGED AUTOMATICALLY TO OPERATIONS LEDGER DATABASE</p>
+                <h5 className="text-sm font-semibold text-emerald-700">Boundary event logged</h5>
+                <p className="mt-1 text-sm text-slate-600">Transition: <span className="font-medium text-slate-900">{telemetry.transition}</span></p>
               </div>
             </div>
           </div>
