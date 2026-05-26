@@ -54,11 +54,12 @@ const migrateData = async () => {
     for (const geo of geofences) {
       const { error } = await supabase.from('office_geofence').upsert({
         id: geo.id,
-        office_name: geo.office_name,
+        office_name: geo.office_name || 'Main Office',
         polygon_coordinates: JSON.parse(geo.polygon_coordinates),
         created_by: geo.created_by,
         created_at: geo.created_at
       }, { onConflict: 'id' });
+
       if (error) console.error(`Error migrating geofence ${geo.id}:`, error.message);
     }
 

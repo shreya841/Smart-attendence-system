@@ -527,15 +527,29 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
     // 11. POST /settings/geofence (Add geofence polygon)
     if (endpoint === '/settings/geofence' && method === 'POST') {
       cache.geofence = null; // Invalidate
-      const { officeName, polygonCoordinates, createdBy } = body;
+      const { 
+        officeName, office_name,
+        polygonCoordinates, polygon_coordinates,
+        createdBy, created_by 
+      } = body || {};
+
+      const officeNameVal = (officeName || office_name || 'Main Office').trim();
+      const polygonCoordsVal = polygonCoordinates || polygon_coordinates;
+      const createdByVal = createdBy || created_by;
+
+      if (!polygonCoordsVal || !Array.isArray(polygonCoordsVal) || polygonCoordsVal.length < 3) {
+        throw new Error('Invalid polygon geometry. At least 3 points are required.');
+      }
+
       const { error } = await supabase.from('office_geofence').insert({
-        office_name: officeName,
-        polygon_coordinates: polygonCoordinates,
-        created_by: createdBy
+        office_name: officeNameVal,
+        polygon_coordinates: polygonCoordsVal,
+        created_by: createdByVal || null
       });
       if (error) throw new Error(error.message);
       return { success: true, message: 'Office geofence polygon saved successfully.' };
     }
+
 
     // 12. GET /attendance (Get unified check in records)
     if (endpoint === '/attendance' && method === 'GET') {

@@ -175,6 +175,18 @@ export default function AdminPanel() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [officeName, setOfficeName] = useState('');
   const [officeAddress, setOfficeAddress] = useState('');
+  const [officeNameError, setOfficeNameError] = useState('');
+  const [toast, setToast] = useState(null);
+  const toastTimeoutRef = useRef(null);
+
+  const showToast = useCallback((message, type = 'info') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ message, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  }, []);
+
   const searchContainerRef = useRef(null);
 
   // Radar states for Live employee map monitor
@@ -1151,20 +1163,27 @@ export default function AdminPanel() {
 
   // Save Settings wrapper
   const saveSettings = async (customSettings = settings) => {
+    if (!officeName || !officeName.trim()) {
+      setOfficeNameError('Office Name is required to save settings.');
+      showToast('Office Name is required to save settings.', 'error');
+      return;
+    }
+    setOfficeNameError('');
     try {
       const payload = {
         ...customSettings,
-        office_name: officeName.trim() || undefined,
+        office_name: officeName.trim(),
         office_address: officeAddress.trim() || undefined,
       };
       const res = await apiCall('/settings', 'POST', payload);
       if (res.success) {
         setLocationSaved(true);
         setTimeout(() => setLocationSaved(false), 3500);
+        showToast('Settings saved successfully in cloud and local cache.', 'success');
         fetchSettings();
       }
     } catch (err) {
-      alert(`Failed to save settings: ${err.message}`);
+      showToast(`Failed to save settings: ${err.message}`, 'error');
     }
   };
 
@@ -1309,25 +1328,33 @@ export default function AdminPanel() {
   };
 
   const handleSavePolygon = async () => {
+    if (!officeName || !officeName.trim()) {
+      setOfficeNameError('Office Name is required to save a geofence.');
+      showToast('Office Name is required to save a geofence.', 'error');
+      return;
+    }
+    setOfficeNameError('');
+
     if (polygonPoints.length < 3) {
-      alert('A polygon boundary requires at least 3 GPS points. Keep walking the perimeter.');
+      showToast('A polygon boundary requires at least 3 GPS points. Keep walking the perimeter.', 'error');
       return;
     }
     
     try {
       const res = await apiCall('/settings/geofence', 'POST', {
-        office_name: officeName || 'Main Office',
+        office_name: officeName.trim() || 'Main Office',
         polygon_coordinates: polygonPoints
       });
       if (res.success) {
         setActivePolygon(polygonPoints);
         setLocationSaved(true);
         setTimeout(() => setLocationSaved(false), 3500);
+        showToast('Office polygon geofence successfully mapped and secured to cloud.', 'success');
         toggleCaptureMode(); // Turn off
       }
     } catch (err) {
       console.error('[GEOFENCE SAVE ERROR]:', err);
-      alert('Failed to save geoboundary polygon: ' + err.message);
+      showToast('Failed to save geoboundary polygon: ' + err.message, 'error');
     }
   };
 
@@ -1342,12 +1369,29 @@ export default function AdminPanel() {
     setSettings(defaultSettings);
     setGeofenceMapCenter([23.217024, 77.424507]);
     setGeofenceMapZoom(16);
-    setOfficeName('');
-    setOfficeAddress('');
+    setOfficeName('Bhopal Headquarters');
+    setOfficeAddress('Bhopal, Madhya Pradesh, India');
     setLocationSearch('');
     setLocationSuggestions([]);
     setShowSuggestions(false);
-    await saveSettings(defaultSettings);
+    setOfficeNameError('');
+    
+    try {
+      const payload = {
+        ...defaultSettings,
+        office_name: 'Bhopal Headquarters',
+        office_address: 'Bhopal, Madhya Pradesh, India',
+      };
+      const res = await apiCall('/settings', 'POST', payload);
+      if (res.success) {
+        setLocationSaved(true);
+        setTimeout(() => setLocationSaved(false), 3500);
+        showToast('Settings reset to default successfully.', 'success');
+        fetchSettings();
+      }
+    } catch (err) {
+      showToast(`Failed to reset settings: ${err.message}`, 'error');
+    }
   };
 
   // Drag handler for office pin in settings tab
@@ -1417,6 +1461,10 @@ export default function AdminPanel() {
         } catch (e) {
           console.warn('[AdminPanel Radar Map Cleanup Warning]:', e);
         }
+      }
+      // 4. Clear active toast timeout
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
       }
     };
   }, []);
@@ -2601,17 +2649,30 @@ export default function AdminPanel() {
 
                 {/* ---- OFFICE NAME & ADDRESS FIELDS ---- */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-slate-950/60 border border-white/5 rounded-xl p-3 space-y-1.5">
+                  <div className={`bg-slate-950/60 border rounded-xl p-3 space-y-1.5 transition-colors ${officeNameError ? 'border-cyber-red/30 bg-cyber-red/5' : 'border-white/5'}`}>
                     <label className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
-                      <Building2 className="w-3 h-3 text-cyber-cyan" /> Office / Building Name
+                      <Building2 className={`w-3 h-3 ${officeNameError ? 'text-cyber-red' : 'text-cyber-cyan'}`} /> Office / Building Name
                     </label>
                     <input
                       type="text"
                       value={officeName}
-                      onChange={(e) => setOfficeName(e.target.value)}
+                      onChange={(e) => {
+                        setOfficeName(e.target.value);
+                        if (e.target.value.trim()) {
+                          setOfficeNameError('');
+                        }
+                      }}
                       placeholder="e.g. SIRT College, Orbit Engineering Group..."
-                      className="w-full bg-slate-950/50 border border-white/8 focus:border-cyber-cyan/50 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 font-mono outline-none transition-all"
+                      className={`w-full bg-slate-950/50 border rounded-lg px-3 py-2 text-xs text-white placeholder-slate-600 font-mono outline-none transition-all ${
+                        officeNameError ? 'border-cyber-red/50 focus:border-cyber-red' : 'border-white/8 focus:border-cyber-cyan/50'
+                      }`}
                     />
+                    {officeNameError && (
+                      <div className="text-[10px] text-cyber-red font-mono mt-1.5 flex items-center gap-1.5 animate-pulse">
+                        <ShieldAlert className="w-3.5 h-3.5 text-cyber-red" />
+                        <span>{officeNameError}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="bg-slate-950/60 border border-white/5 rounded-xl p-3 space-y-1.5">
                     <label className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-widest">
@@ -3429,6 +3490,51 @@ export default function AdminPanel() {
           </div>
         </div>
       )}
+
+      {/* Modern, Subtle SaaS-Grade Toast Notifications */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 15, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.99 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 px-4 py-3 rounded-xl border font-mono shadow-lg backdrop-blur-sm"
+            style={{
+              backgroundColor: toast.type === 'success' 
+                ? 'rgba(16, 185, 129, 0.08)' 
+                : toast.type === 'error' 
+                  ? 'rgba(239, 68, 68, 0.08)' 
+                  : 'rgba(15, 23, 42, 0.85)',
+              borderColor: toast.type === 'success' 
+                ? 'rgba(16, 185, 129, 0.25)' 
+                : toast.type === 'error' 
+                  ? 'rgba(239, 68, 68, 0.25)' 
+                  : 'rgba(255, 255, 255, 0.08)',
+              color: toast.type === 'success' 
+                ? '#34D399' 
+                : toast.type === 'error' 
+                  ? '#F87171' 
+                  : '#E2E8F0',
+            }}
+          >
+            {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+            {toast.type === 'error' && <ShieldAlert className="w-4 h-4 text-red-400 flex-shrink-0" />}
+            {toast.type === 'info' && <Activity className="w-4 h-4 text-cyber-cyan flex-shrink-0" />}
+            
+            <div className="text-[10px] font-bold tracking-wide uppercase select-none">
+              {toast.message}
+            </div>
+
+            <button
+              onClick={() => setToast(null)}
+              className="ml-2 text-slate-500 hover:text-white transition-colors cursor-pointer flex-shrink-0 p-0.5 rounded hover:bg-white/5"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
