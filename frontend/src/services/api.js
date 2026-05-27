@@ -1026,7 +1026,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
       cache.logs = null;
       cache.myLogs = {};
       cache.attendanceHistory = {};
-      const { faceDescriptor, faceMetrics, location, userCoords } = body;
+      const { faceDescriptor, faceMetrics, location, userCoords, action } = body;
       
       console.log('[BIOMETRIC SCAN INTERCEPT]: Received scan request');
       console.log('[BIOMETRIC SCAN INTERCEPT]: Incoming descriptor type:', typeof faceDescriptor, 'isArray:', Array.isArray(faceDescriptor));
@@ -1313,6 +1313,20 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         .eq('employee_id', employeeId)
         .eq('date', today)
         .maybeSingle();
+
+      // Explicit Action Validation Safeguards
+      if (action === 'CHECK_IN') {
+        if (attRecord) {
+          throw new Error('You have already checked in for today.');
+        }
+      } else if (action === 'CHECK_OUT') {
+        if (!attRecord) {
+          throw new Error('You must check in first before checking out.');
+        }
+        if (attRecord.check_out) {
+          throw new Error('You have already checked out for today.');
+        }
+      }
 
       let eventType = 'CHECK_IN';
       let responseMessage = '';

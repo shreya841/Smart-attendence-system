@@ -11,7 +11,7 @@ import { apiCall } from '../../services/api.js';
  * @param {{latitude: number, longitude: number}|null} userCoords GPS coordinates
  * @returns {Promise<any>} Response object from the server
  */
-export const submitAttendanceScan = async (descriptorArray, userCoords) => {
+export const submitAttendanceScan = async (descriptorArray, userCoords, actionType) => {
   if (!userCoords || !userCoords.latitude || !userCoords.longitude) {
     console.warn('[GPS FALLBACK] Missing GPS coordinates. Using office fallback.');
     let geofence_lat = 23.2168;
@@ -35,7 +35,8 @@ export const submitAttendanceScan = async (descriptorArray, userCoords) => {
     faceDescriptor: Array.from(descriptorArray),
     faceMetrics: { spoofIndex: 0.05, landmarks: [] },
     location: 'Front Desk Camera',
-    userCoords: { latitude: userCoords.latitude, longitude: userCoords.longitude }
+    userCoords: { latitude: userCoords.latitude, longitude: userCoords.longitude },
+    action: actionType
   });
 
   if (!response.success) {

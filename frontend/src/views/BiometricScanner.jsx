@@ -135,6 +135,8 @@ export default function BiometricScanner() {
   const [stream, setStream] = useState(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isStartingScanner, setIsStartingScanner] = useState(false);
+  const cooldownIntervalRef = useRef(null);
   
   // Model loading state
   const [modelsStatus, setModelsStatus] = useState('idle');
@@ -167,6 +169,9 @@ export default function BiometricScanner() {
       if (animationFrameIdRef.current) {
         cancelAnimationFrame(animationFrameIdRef.current);
       }
+      if (cooldownIntervalRef.current) {
+        clearInterval(cooldownIntervalRef.current);
+      }
       if (activeStreamRef.current) {
         console.log('[BiometricScanner Cleanup]: Stopping active camera tracks...');
         activeStreamRef.current.getTracks().forEach(track => track.stop());
@@ -187,7 +192,7 @@ export default function BiometricScanner() {
   }, []);
   
   // Synchronized state for UI rendering
-  const [scannerStatusMsg, setScannerStatusMsg] = useState('CAMERA READY');
+  const [scannerStatusMsg, setScannerStatusMsg] = useState('Scanner Closed');
   const [cooldownState, setCooldownState] = useState(false);
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState(0);
   const [lastScanDetails, setLastScanDetails] = useState(null);
@@ -317,15 +322,12 @@ export default function BiometricScanner() {
     initModels();
   }, []);
 
-  // 2. Automatically launch camera feed once models are loaded and ready
+  // 2. Automatically clean up camera feed on unmount
   useEffect(() => {
-    if (modelsStatus === 'ready') {
-      startCamera();
-    }
     return () => {
       stopCamera();
     };
-  }, [modelsStatus]);
+  }, []);
 
   // 5. Unified 5-Second Cooldown Protocol
   const executeScanCooldown = (scanResponse, wasSuccess) => {
@@ -336,6 +338,9 @@ export default function BiometricScanner() {
     setTelemetryLockProgress(0);
     consecutiveFrontFrames.current = 0;
     blinkClosedRef.current = false;
+    
+    // IMMEDIATELY auto-stop the camera upon attendance mark completion!
+    stopCamera(true);
     
     // Play sci-fi notification audio
     playBiometricSound(wasSuccess ? 'success' : 'failure');
@@ -379,11 +384,15 @@ export default function BiometricScanner() {
     // Use ref so voice always reflects current toggle state, even inside async closures
     speak(voiceMsg, voiceEnabledRef.current);
 
+    if (cooldownIntervalRef.current) {
+      clearInterval(cooldownIntervalRef.current);
+    }
     setCooldownTimeLeft(5);
-    const interval = setInterval(() => {
+    cooldownIntervalRef.current = setInterval(() => {
       setCooldownTimeLeft((prev) => {
         if (prev <= 1) {
-          clearInterval(interval);
+          clearInterval(cooldownIntervalRef.current);
+          cooldownIntervalRef.current = null;
           cooldownActive.current = false;
           scanInProgress.current = false; // Always release lock on cooldown reset
           isProcessingRef.current = false; // Release processing lock
@@ -521,28 +530,24 @@ export default function BiometricScanner() {
           // Auto-trigger scan if face remains stable for 2 frames (~60ms) for high-speed terminal UX
           if (consecutiveFrontFrames.current >= 2 && !cooldownActive.current && !scanInProgress.current) {
             console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Face stability threshold reached (2 frames). Instantly executing auto-scan...');
-            setScannerStatusMsg('FACE LOCKED - SCANNING...');
+            setScannerStatusMsg('Scanning Face...');
             handleAutoScan(detection.descriptor);
           }
 
           // UI status updates
-          if (consecutiveFrontFrames.current < 1) {
-            setScannerStatusMsg('STABILIZING FACE...');
-          } else {
-            setScannerStatusMsg('FACE LOCKED - SCANNING...');
-          }
+          setScannerStatusMsg('Scanning Face...');
         } else {
           setRealtimeScore(0);
           consecutiveFrontFrames.current = 0;
           setTelemetryLockProgress(0);
           setTelemetryPose('none');
           blinkClosedRef.current = false;
-          setScannerStatusMsg('SEARCHING FOR FACE...');
+          setScannerStatusMsg('Scanning Face...');
           drawScanningCrosshairs(ctx, displaySize.width, displaySize.height);
         }
       } catch (err) {
         console.error('[BIOMETRIC SCAN LOOP ERROR]:', err);
-        setScannerStatusMsg('SCANNER ERROR - RETRYING...');
+        setScannerStatusMsg('Scanning Face...');
         scanInProgress.current = false; // Reset on error so loop can recover
         blinkClosedRef.current = false;
       }
@@ -553,10 +558,11 @@ export default function BiometricScanner() {
 
   // 8. Start and Stop Camera Stream Functions
   const startCamera = async () => {
-    if (modelsStatus !== 'ready') return;
+    if (modelsStatus !== 'ready' || isStartingScanner || cameraActive) return;
     
     try {
-      setScannerStatusMsg('STARTING CAMERA...');
+      setIsStartingScanner(true);
+      setScannerStatusMsg('Starting Scanner...');
       setScanResult(null);
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 }
@@ -564,12 +570,13 @@ export default function BiometricScanner() {
       
       setCameraActive(true);
       scanLoopActive.current = true;
-      setScannerStatusMsg('CAMERA STARTED - SEARCHING');
+      setScannerStatusMsg('Scanning Face...');
       
       setTimeout(() => {
         if (!scanLoopActive.current) {
           console.log('[BiometricScanner startCamera]: Camera stopped before video initialized. Cleaning up stream tracks.');
           mediaStream.getTracks().forEach(track => track.stop());
+          setIsStartingScanner(false);
           return;
         }
         
@@ -583,18 +590,21 @@ export default function BiometricScanner() {
           console.warn('[BiometricScanner startCamera]: videoRef.current not found after mount delay. Terminating stream.');
           mediaStream.getTracks().forEach(track => track.stop());
         }
+        setIsStartingScanner(false);
       }, 10);
     } catch (err) {
       console.error('[CAMERA START ERROR]:', err);
       setScannerStatusMsg('CAMERA ERROR: ' + err.message);
+      setIsStartingScanner(false);
       alert('Failed connecting to webcam. Please verify camera permissions in your browser.');
     }
   };
 
-  const stopCamera = () => {
+  const stopCamera = (isAutomaticCleanup = false) => {
     scanLoopActive.current = false;
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
+      animationFrameIdRef.current = null;
     }
     if (activeStreamRef.current) {
       console.log('[BiometricScanner stopCamera]: Stopping active camera tracks...');
@@ -609,6 +619,14 @@ export default function BiometricScanner() {
     setTelemetryLockProgress(0);
     setTelemetryPose('none');
     consecutiveFrontFrames.current = 0;
+    setIsStartingScanner(false);
+    
+    // Status message update
+    if (isAutomaticCleanup) {
+      setScannerStatusMsg('Attendance Marked');
+    } else {
+      setScannerStatusMsg('Scanner Closed');
+    }
   };
 
   // Redundant camera track cleanup removed to prevent self-sabotaging camera closure on state change.
@@ -683,6 +701,8 @@ export default function BiometricScanner() {
               videoRef={videoRef} 
               cameraActive={cameraActive} 
               modelsStatus={modelsStatus} 
+              onStartCamera={startCamera}
+              isStarting={isStartingScanner}
             />
 
             {/* 2. Face Mesh & Laser Overlay */}
@@ -765,6 +785,7 @@ export default function BiometricScanner() {
             modelsStatus={modelsStatus}
             onStartCamera={startCamera}
             onStopCamera={stopCamera}
+            isStarting={isStartingScanner}
           />
         </motion.div>
 

@@ -181,7 +181,7 @@ router.get('/identities', requireAuth, async (req, res, next) => {
 // @route   POST /api/attendance/scan
 // @desc    Process camera face scan to record attendance (Open endpoint for scanners)
 router.post('/scan', async (req, res, next) => {
-  const { faceDescriptor, faceMetrics, location, userCoords } = req.body;
+  const { faceDescriptor, faceMetrics, location, userCoords, action } = req.body;
   const db = getDb();
 
   try {
@@ -330,6 +330,29 @@ router.post('/scan', async (req, res, next) => {
         `SELECT * FROM attendance WHERE employee_id = ? AND date = ?`,
         [employeeId, today]
       );
+    }
+
+    // Explicit Action Validation Safeguards
+    if (action === 'CHECK_IN') {
+      if (attendanceRecord) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have already checked in for today.'
+        });
+      }
+    } else if (action === 'CHECK_OUT') {
+      if (!attendanceRecord) {
+        return res.status(400).json({
+          success: false,
+          message: 'You must check in first before checking out.'
+        });
+      }
+      if (attendanceRecord.check_out) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have already checked out for today.'
+        });
+      }
     }
 
     let eventType = 'CHECK_IN';

@@ -214,7 +214,8 @@ export function ScannerControls({
   cameraActive,
   modelsStatus,
   onStartCamera,
-  onStopCamera
+  onStopCamera,
+  isStarting
 }) {
   return (
     <div className="mt-6 flex gap-4 justify-center">
@@ -223,23 +224,23 @@ export function ScannerControls({
           onClick={onStopCamera}
           className="flex items-center gap-2 bg-red-50 hover:bg-red-100 border border-red-100 text-red-600 text-sm font-semibold py-2.5 px-4 rounded-xl cursor-pointer transition-all select-none active:scale-[0.98]"
         >
-          <CameraOff className="w-3.5 h-3.5" /> Stop Scan Lens
+          <CameraOff className="w-3.5 h-3.5" /> Stop Scanner
         </button>
       ) : (
         <button
-          onClick={onStartCamera}
-          disabled={modelsStatus !== 'ready'}
-          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white font-semibold py-2.5 px-5 rounded-xl border border-indigo-100 text-sm cursor-pointer transition-all duration-200 select-none disabled:opacity-50 active:scale-[0.98]"
+          onClick={() => onStartCamera()}
+          disabled={modelsStatus !== 'ready' || isStarting}
+          className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white font-semibold py-2.5 px-5 rounded-xl border border-indigo-100 text-sm cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
         >
-          {modelsStatus === 'loading' ? (
+          {modelsStatus === 'loading' || isStarting ? (
             <>
               <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
-              Booting engines...
+              {isStarting ? 'Starting Scanner...' : 'Booting engines...'}
             </>
           ) : (
             <>
               <Camera className="w-3.5 h-3.5 text-white" />
-              Initialize Scan Lens
+              Start Scanner
             </>
           )}
         </button>
