@@ -66,7 +66,7 @@ export default function Register() {
           <label className="mb-2 block text-sm font-medium text-slate-700">Corporate ID</label>
           <div className="relative">
             <BadgeCheck className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-            <input type="text" name="id" required placeholder="EMP-102" value={formData.id} onChange={handleChange} className="w-full pl-10" />
+            <input type="text" name="id" required placeholder="OES/038" value={formData.id} onChange={handleChange} className="w-full pl-10" />
           </div>
         </div>
 

@@ -7,11 +7,12 @@ const get = promisify(db.get.bind(db));
 const all = promisify(db.all.bind(db));
 
 try {
-  const employees = await all('SELECT id, name, email, role, department FROM employees');
-  console.log('--- SEEDED EMPLOYEES ---');
+  const employees = await all('SELECT id, name, email, role, (face_data IS NOT NULL) AS is_face_present, LENGTH(face_data) AS face_data_length FROM employees');
+  console.log('--- SEEDED EMPLOYEES WITH FACE DATA ---');
   console.log(JSON.stringify(employees, null, 2));
 } catch (error) {
   console.error('Error fetching employees:', error);
 } finally {
   db.close();
 }
+

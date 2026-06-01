@@ -134,7 +134,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   return R * c; // distance in meters
 };
 
-const generateUniqueId = () => 'EMP-' + Math.floor(100 + Math.random() * 900);
+const generateUniqueId = () => 'OES/' + String(Math.floor(1 + Math.random() * 999)).padStart(3, '0');
 const generatePassword = () => 'emp@' + Math.floor(1000 + Math.random() * 9000);
 
 export default function AdminPanel() {
@@ -1876,7 +1876,7 @@ export default function AdminPanel() {
                   type="text"
                   name="id"
                   required
-                  placeholder="EMP-102"
+                  placeholder="OES/038"
                   value={form.id}
                   onChange={handleInputChange}
                   className="w-full glass-input py-2 text-xs"

@@ -18,6 +18,9 @@ export const initializeDatabase = async () => {
 
   console.log(`[DATABASE INITIALIZING]: Connecting to SQLite DB at ${dbPath}`);
 
+  // Enforce foreign key constraints in SQLite
+  await run('PRAGMA foreign_keys = ON;');
+
   // 1. Employees Table
   await run(`
     CREATE TABLE IF NOT EXISTS employees (
@@ -117,7 +120,7 @@ export const initializeDatabase = async () => {
     
     await run(`
       INSERT INTO employees (id, name, email, password, role, department, face_data) 
-      VALUES ('EMP-001', 'Administrator', 'hr.orbitengineering.group@gmail.com', ?, 'admin', 'Security & HR', ?)
+      VALUES ('OES/001', 'Administrator', 'hr.orbitengineering.group@gmail.com', ?, 'admin', 'Security & HR', ?)
     `, [adminHash, adminFace]);
     
     console.log(`[DATABASE SEEDED]: Created Admin ('hr.orbitengineering.group@gmail.com' / 'admin@2026') with active face biometrics.`);
@@ -144,10 +147,10 @@ export const initializeDatabase = async () => {
     
     await run(`
       INSERT INTO employees (id, name, email, password, role, department, face_data) 
-      VALUES ('EMP-102', 'Shreya', 'employee@company.com', ?, 'employee', 'Engineering', ?)
-    `, [employeeHash, employeeFace]);
+      VALUES ('OES/038', 'Shreya', 'employee@company.com', ?, 'employee', 'Engineering', NULL)
+    `, [employeeHash]);
     
-    console.log(`[DATABASE SEEDED]: Created default Employee ('employee@company.com' / 'employeepassword') with active face biometrics.`);
+    console.log(`[DATABASE SEEDED]: Created default Employee ('employee@company.com' / 'employeepassword') with NO active face biometrics.`);
   }
 
   dbInstance = {

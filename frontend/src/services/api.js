@@ -212,8 +212,37 @@ const cache = {
 };
 
 const matchRoute = (path, pattern) => {
-  const pathParts = path.split('/').filter(Boolean);
-  const patternParts = pattern.split('/').filter(Boolean);
+  const cleanPath = path.replace(/^\/+|\/+$/g, '');
+  const cleanPattern = pattern.replace(/^\/+|\/+$/g, '');
+
+  const patternParts = cleanPattern.split('/');
+
+  // Special-case handlers for OES/XXX IDs containing slashes
+  if (cleanPattern.startsWith('employees/:id/face') && cleanPath.startsWith('employees/') && cleanPath.endsWith('/face')) {
+    const id = cleanPath.slice('employees/'.length, -'/face'.length);
+    return { id };
+  }
+  if (cleanPattern.startsWith('employees/:id/reset-face') && cleanPath.startsWith('employees/') && cleanPath.endsWith('/reset-face')) {
+    const id = cleanPath.slice('employees/'.length, -'/reset-face'.length);
+    return { id };
+  }
+  if (cleanPattern.startsWith('employees/:id/coordinates') && cleanPath.startsWith('employees/') && cleanPath.endsWith('/coordinates')) {
+    const id = cleanPath.slice('employees/'.length, -'/coordinates'.length);
+    return { id };
+  }
+  if (cleanPattern.startsWith('attendance/history/:employeeId') && cleanPath.startsWith('attendance/history/')) {
+    const employeeId = cleanPath.slice('attendance/history/'.length);
+    return { employeeId };
+  }
+  if (cleanPattern === 'employees/:id' && cleanPath.startsWith('employees/')) {
+    if (!cleanPath.endsWith('/face') && !cleanPath.endsWith('/reset-face') && !cleanPath.endsWith('/coordinates')) {
+      const id = cleanPath.slice('employees/'.length);
+      return { id };
+    }
+  }
+
+  // Fallback to segment-based matching for other standard routes
+  const pathParts = cleanPath.split('/').filter(Boolean);
   if (pathParts.length !== patternParts.length) return null;
   const params = {};
   for (let i = 0; i < patternParts.length; i++) {
@@ -244,6 +273,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
       { path: '/employees', method: 'POST', exact: true },  // add employee
       { path: '/logs', method: 'GET', exact: true },         // all logs
       { path: '/logs/clear', method: 'POST', exact: true },  // clear logs
+      { path: '/attendance', method: 'GET', exact: true },   // organization-wide attendance logs
       { path: '/attendance/clear', method: 'POST', exact: true }, // wipe attendance
       { path: '/settings', method: 'POST', exact: true },   // write settings
       { path: '/settings/geofence', method: 'POST', exact: true }, // write geofence
@@ -265,11 +295,22 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
       }
     }
 
-    // Block face enrollment/reset (admin-only operations)
+    // Block employee access to other employees' attendance history
+    const attHistMatch = matchRoute(endpoint, '/attendance/history/:employeeId');
+    if (attHistMatch && attHistMatch.employeeId !== currentUser.id) {
+      throw new Error('Access denied. You can only view your own attendance history.');
+    }
+
+    // Face enrollment: employees can enroll their OWN face; admin can enroll any
     const faceEndpoint = matchRoute(endpoint, '/employees/:id/face');
+    if (faceEndpoint && faceEndpoint.id !== currentUser.id) {
+      throw new Error('Access denied. You can only enroll your own face.');
+    }
+
+    // Face reset is admin-only
     const faceResetEndpoint = matchRoute(endpoint, '/employees/:id/reset-face');
-    if (faceEndpoint || faceResetEndpoint) {
-      throw new Error('Access denied. Face enrollment requires administrator privileges.');
+    if (faceResetEndpoint) {
+      throw new Error('Access denied. Face reset requires administrator privileges.');
     }
 
     // Block employee delete
@@ -341,7 +382,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
               if (!existingDescriptor) continue;
               const dist = calculateEuclideanDistance(newDescriptor, existingDescriptor);
               if (dist < DUPLICATE_THRESHOLD) {
-                throw new Error(`Duplicate biometric detected: This face is already registered under employee "${emp.name}" (${emp.id}). Each employee must have a unique face enrollment.`);
+                throw new Error("Duplicate face detected. This biometric identity already belongs to another employee.");
               }
             }
           }
@@ -368,7 +409,14 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
       // Add to employees table
       const { error: dbError } = await supabase.from('employees').insert({
-        id, name, email, password, role, department, face_data: face_data || null, status: 'Offline'
+        id,
+        name,
+        email,
+        password,
+        role,
+        department,
+        face_data: face_data || null,
+        status: 'Offline'
       });
 
       if (dbError) throw new Error(`Database record insertion failed: ${dbError.message}`);
@@ -479,14 +527,16 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         if (!dbDescriptor) continue;
         const distance = calculateEuclideanDistance(faceDescriptor, dbDescriptor);
         if (distance <= DUPLICATE_THRESHOLD) {
-          throw new Error(`Duplicate biometric detected: This face is already registered under employee "${emp.name}" (${emp.id}). Each employee must have a unique face enrollment.`);
+          throw new Error("Duplicate face detected. This biometric identity already belongs to another employee.");
         }
       }
 
       const encrypted = await encryptDescriptor(faceDescriptor);
       const { error: updateError } = await supabase
         .from('employees')
-        .update({ face_data: encrypted })
+        .update({
+          face_data: encrypted
+        })
         .eq('id', empId);
       if (updateError) throw new Error(updateError.message);
 
@@ -976,7 +1026,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         const adminFace = await encryptDescriptor(desc);
 
         await supabase.from('employees').insert({
-          id: 'EMP-001',
+          id: 'OES/001',
           name: 'Administrator',
           email: 'hr.orbitengineering.group@gmail.com',
           password: 'admin@2026',
@@ -1005,16 +1055,16 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         const empFace = await encryptDescriptor(desc);
 
         await supabase.from('employees').insert({
-          id: 'EMP-002',
+          id: 'OES/038',
           name: 'Standard Employee',
           email: 'employee@company.com',
           password: 'employeepassword',
           role: 'employee',
           department: 'Engineering',
-          face_data: empFace,
+          face_data: null,
           status: 'Offline'
         });
-        console.log('[SEEDING]: Employee seeded successfully.');
+        console.log('[SEEDING]: Employee seeded successfully with NO face data.');
       }
 
       return { success: true, message: 'Database reset successfully and default accounts re-seeded.' };
@@ -1042,69 +1092,56 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         throw new Error(`Invalid biometric face descriptor dimension: expected 128, got ${faceDescriptor.length}`);
       }
 
-      // Fetch active templates (use cache if available)
-      let decryptedEmployees = cache.employeeTemplates;
-      if (!decryptedEmployees) {
-        console.log('[BIOMETRIC SCAN INTERCEPT]: Cache miss. Fetching templates from Supabase...');
-        const { data: employees, error: fetchErr } = await supabase
-          .from('employees')
-          .select('id, name, department, face_data')
-          .not('face_data', 'is', null);
-        if (fetchErr) {
-          console.error('[BIOMETRIC SCAN INTERCEPT ERROR]: Failed fetching templates:', fetchErr);
-          throw new Error(fetchErr.message);
-        }
-
-        decryptedEmployees = [];
-        for (const emp of (employees || [])) {
-          try {
-            const dbDescriptor = await decryptDescriptor(emp.face_data);
-            if (dbDescriptor) {
-              decryptedEmployees.push({
-                id: emp.id,
-                name: emp.name,
-                department: emp.department,
-                descriptor: dbDescriptor
-              });
-            } else {
-              console.warn(`[BIOMETRIC SCAN INTERCEPT]: Decrypted descriptor is null for Employee ID ${emp.id}`);
-            }
-          } catch (decErr) {
-            console.error(`[BIOMETRIC SCAN INTERCEPT ERROR]: Decryption exception for employee ID ${emp.id}:`, decErr);
-          }
-        }
-        cache.employeeTemplates = decryptedEmployees;
-        console.log(`[BIOMETRIC SCAN INTERCEPT]: Successfully loaded and cached ${decryptedEmployees.length} face templates.`);
-      } else {
-        console.log(`[BIOMETRIC SCAN INTERCEPT]: Cache hit. Using ${decryptedEmployees.length} cached face templates.`);
+      // Enforce face ownership: Compare captured face descriptor ONLY against the enrolled descriptor of the currently authenticated employee.
+      if (!currentUser) {
+        throw new Error('Access denied. No active authenticated session found.');
       }
 
-      let bestMatch = null;
-      let bestDistance = Infinity;
-      const threshold = 0.70; // Relaxed threshold for reliable matching (up from 0.55)
-      console.log('[BIOMETRIC SCAN INTERCEPT]: Using distance matching threshold:', threshold);
+      console.log(`[BIOMETRIC SCAN INTERCEPT]: Querying biometric data for authenticated employee ID: ${currentUser.id}`);
+      const { data: currentDbEmp, error: fetchErr } = await supabase
+        .from('employees')
+        .select('id, name, department, face_data')
+        .eq('id', currentUser.id)
+        .single();
 
-      for (const emp of decryptedEmployees) {
-        const distance = calculateEuclideanDistance(faceDescriptor, emp.descriptor);
-        console.log(`[BIOMETRIC SCAN INTERCEPT]: Distance to ${emp.name} (ID: ${emp.id}): ${distance.toFixed(4)}`);
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          bestMatch = emp;
-        }
+      if (fetchErr || !currentDbEmp) {
+        console.error('[BIOMETRIC SCAN INTERCEPT ERROR]: Failed fetching authenticated employee profile:', fetchErr);
+        throw new Error('Authenticated employee profile not found in database.');
       }
 
-      console.log(`[BIOMETRIC SCAN INTERCEPT SUMMARY]: Best Match: ${bestMatch ? bestMatch.name : 'None'}, Distance: ${bestDistance.toFixed(4)}`);
+      if (!currentDbEmp.face_data) {
+        const error = new Error('No enrolled biometrics found for this account. Please enroll your face first.');
+        error.voiceMessage = 'Access denied. Please enroll your face first.';
+        throw error;
+      }
 
-      // Unknown face check
-      if (!bestMatch || bestDistance > threshold) {
-        const confidence = bestDistance !== Infinity ? Math.max(0, 1 - bestDistance) : 0;
-        console.warn(`[BIOMETRIC SCAN INTERCEPT MATCH FAILURE]: Best distance ${bestDistance.toFixed(4)} exceeds threshold ${threshold}`);
+      let dbDescriptor = null;
+      try {
+        dbDescriptor = await decryptDescriptor(currentDbEmp.face_data);
+      } catch (decErr) {
+        console.error('[BIOMETRIC SCAN INTERCEPT ERROR]: Decryption exception:', decErr);
+      }
 
+      if (!dbDescriptor) {
+        throw new Error('Enrolled biometrics signature is corrupt.');
+      }
+
+      const faceDistance = calculateEuclideanDistance(faceDescriptor, dbDescriptor);
+      const threshold = 0.70;
+      const isMatch = faceDistance <= threshold;
+      const confidence = faceDistance !== Infinity ? Math.max(0, 1 - faceDistance) : 0;
+
+      console.log(`[BIOMETRIC SCAN INTERCEPT]: Matching live scan against ${currentDbEmp.name} (ID: ${currentDbEmp.id}). Distance: ${faceDistance.toFixed(4)}, Threshold: ${threshold}`);
+
+      if (!isMatch) {
+        console.warn(`[BIOMETRIC SCAN INTERCEPT MATCH FAILURE]: Distance ${faceDistance.toFixed(4)} exceeds threshold ${threshold}`);
+
+        // Insert UNAUTHORIZED_SCAN log tied to the logged-in employee (ownership breach)
         await supabase.from('logs').insert({
-          employee_id: null,
+          employee_id: currentDbEmp.id,
           event_type: 'UNAUTHORIZED_SCAN',
           location: location || 'Front Desk Camera',
-          details: JSON.stringify({ confidence })
+          details: JSON.stringify({ confidence, error: 'Face biometrics ownership mismatch' })
         });
 
         // Broadcast to Dashboard log feed & Alerts
@@ -1116,24 +1153,24 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
         broadcastRealtimeEvent('unauthorized:alert', alertData);
         
         broadcastRealtimeEvent('logs:new', {
+          employee_id: currentDbEmp.id,
           event_type: 'UNAUTHORIZED_SCAN',
           timestamp: new Date().toISOString(),
           location: location || 'Front Desk Camera',
-          details: JSON.stringify({ confidence }),
-          name: 'Unknown Person'
+          name: currentDbEmp.name,
+          details: JSON.stringify({ confidence, error: 'Face biometrics ownership mismatch' })
         });
 
-        const voiceMessage = `Access denied. Unauthorized person. Face not recognized.`;
-        const error = new Error('Unauthorized Person: Face not recognized.');
+        const voiceMessage = `Access denied. Biometrics mismatch. Captured face does not belong to logged in account for ${currentDbEmp.name}.`;
+        const error = new Error(`Face Mismatch: Captured face does not belong to employee account ${currentDbEmp.name}.`);
         error.voiceMessage = voiceMessage;
         throw error;
       }
 
-      const employeeId = bestMatch.id;
-      const name = bestMatch.name;
-      const department = bestMatch.department;
-      const confidence = Math.max(0, 1 - bestDistance);
-      console.log(`[BIOMETRIC SCAN INTERCEPT MATCH SUCCESS]: Scanned person is ${name} (${employeeId}) with confidence ${confidence.toFixed(4)}`);
+      const employeeId = currentDbEmp.id;
+      const name = currentDbEmp.name;
+      const department = currentDbEmp.department;
+      console.log(`[BIOMETRIC SCAN INTERCEPT MATCH SUCCESS]: Scanned person successfully validated as ${name} (${employeeId}) with confidence ${confidence.toFixed(4)}`);
 
       // Anti-spoofing check
       const liveness = verifyLiveness(faceMetrics);

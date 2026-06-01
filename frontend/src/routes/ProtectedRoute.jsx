@@ -1,9 +1,10 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export default function ProtectedRoute({ children, allowedRoles = [] }) {
   const { isAuthenticated, user, loading } = useAuth();
+  const location = useLocation();
 
   // While auth hydration is in progress, hold here — never redirect during loading
   // This prevents the race where a valid session temporarily appears as unauthenticated
@@ -23,6 +24,20 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
   // Only redirect to login AFTER hydration is complete and we are confirmed not authenticated
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Face enrollment enforcement for standard employees
+  if (user?.role === 'employee') {
+    const faceRegistered = user.is_face_registered || user.face_registered;
+    if (!faceRegistered) {
+      if (location.pathname !== '/enroll-face') {
+        console.log('[ROUTE GUARD]: Biometrics missing. Redirecting to /enroll-face.');
+        return <Navigate to="/enroll-face" replace />;
+      }
+    } else if (location.pathname === '/enroll-face') {
+      console.log('[ROUTE GUARD]: Biometrics already registered. Redirecting to dashboard.');
+      return <Navigate to="/employee-dashboard" replace />;
+    }
   }
 
   // Redirect if user role is not allowed on this path

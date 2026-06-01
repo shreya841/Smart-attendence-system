@@ -2,7 +2,8 @@ import express from 'express';
 import { getDb } from '../database/db.js';
 import { supabase, checkSupabaseConnection } from '../database/supabaseClient.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { identifyFace, verifyLiveness } from '../services/faceRecognitionService.js';
+import { identifyFace, verifyLiveness, calculateEuclideanDistance } from '../services/faceRecognitionService.js';
+import { decryptDescriptor } from '../services/encryption.js';
 import { synthesizeVoiceGreeting, triggerAIAnomalyReport } from '../services/aiAgentService.js';
 import { calculateDistance } from '../services/geofenceService.js';
 import { broadcastEvent } from '../config/socket.js';
@@ -112,9 +113,9 @@ router.get('/my-history', requireAuth, async (req, res, next) => {
 
 // @route   GET /api/attendance/history/:employeeId
 // @desc    Get attendance records for a specific employee
-router.get('/history/:employeeId', requireAuth, async (req, res, next) => {
+router.get(['/history/:employeeId', '/history/OES/:employeeId'], requireAuth, async (req, res, next) => {
   const db = getDb();
-  const { employeeId } = req.params;
+  const employeeId = req.originalUrl.includes('/history/OES/') ? `OES/${req.params.employeeId}` : req.params.employeeId;
 
   try {
     // Basic authorization check: employees can only view their own history unless they are Admin
@@ -179,8 +180,8 @@ router.get('/identities', requireAuth, async (req, res, next) => {
 });
 
 // @route   POST /api/attendance/scan
-// @desc    Process camera face scan to record attendance (Open endpoint for scanners)
-router.post('/scan', async (req, res, next) => {
+// @desc    Process camera face scan to record attendance (Enforces authenticated employee face ownership)
+router.post('/scan', requireAuth, async (req, res, next) => {
   const { faceDescriptor, faceMetrics, location, userCoords, action } = req.body;
   const db = getDb();
 
@@ -189,25 +190,37 @@ router.post('/scan', async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Invalid or missing biometric descriptor.' });
     }
 
+    if (!req.user.face_data) {
+      return res.status(400).json({ success: false, message: 'No enrolled biometrics found for this account. Please enroll your face first.' });
+    }
+
+    const dbDescriptor = decryptDescriptor(req.user.face_data);
+    if (!dbDescriptor) {
+      return res.status(400).json({ success: false, message: 'Enrolled biometrics signature is corrupt.' });
+    }
+
+    const distance = calculateEuclideanDistance(faceDescriptor, dbDescriptor);
+    const threshold = 0.70;
+
+    const isMatch = distance <= threshold;
+    const confidence = distance !== Infinity ? Math.max(0, 1 - distance) : 0;
+
     const isSupabaseLive = await checkSupabaseConnection();
 
-    // 1. Identify Face
-    const match = await identifyFace(faceDescriptor);
-    
-    // 2. Handle Unknown Face
-    if (!match.matched) {
+    // 2. Handle Face Mismatch
+    if (!isMatch) {
       // Record unauthorized scan in logs
       await db.run(
         `INSERT INTO logs (employee_id, event_type, location, details) VALUES (?, ?, ?, ?)`,
-        [null, 'UNAUTHORIZED_SCAN', location || 'Front Desk Camera', JSON.stringify({ confidence: match.confidence })]
+        [req.user.id, 'UNAUTHORIZED_SCAN', location || 'Front Desk Camera', JSON.stringify({ confidence, error: 'Face biometrics ownership mismatch' })]
       );
 
       if (isSupabaseLive) {
         await supabase.from('logs').insert({
-          employee_id: null,
+          employee_id: req.user.id,
           event_type: 'UNAUTHORIZED_SCAN',
           location: location || 'Front Desk Camera',
-          details: JSON.stringify({ confidence: match.confidence })
+          details: JSON.stringify({ confidence, error: 'Face biometrics ownership mismatch' })
         });
       }
 
@@ -215,19 +228,21 @@ router.post('/scan', async (req, res, next) => {
       broadcastEvent('unauthorized:alert', {
         timestamp: new Date().toISOString(),
         location: location || 'Front Desk Camera',
-        confidence: match.confidence
+        confidence
       });
 
-      const voiceMessage = synthesizeVoiceGreeting('Unknown', { eventType: 'UNAUTHORIZED_SCAN' });
+      const voiceMessage = `Access denied. Biometrics mismatch. Captured face does not belong to logged in account for ${req.user.name}.`;
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized Person: Face not recognized.',
+        message: `Face Mismatch: Captured face does not belong to employee account ${req.user.name}.`,
         voiceMessage
       });
     }
 
     // 3. Handle Identified Employee: Liveness verification (Anti-spoof)
-    const { employeeId, name, department, confidence } = match;
+    const employeeId = req.user.id;
+    const name = req.user.name;
+    const department = req.user.department;
     const liveness = verifyLiveness(faceMetrics || { spoofIndex: 0.1 });
     
     if (!liveness.passed) {

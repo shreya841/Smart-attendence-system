@@ -11,6 +11,7 @@ import ErrorBoundary from '../context/ErrorBoundary.jsx';
 import Login from '../views/Login.jsx';
 import Dashboard from '../views/Dashboard.jsx';
 import EmployeeDashboard from '../views/EmployeeDashboard.jsx';
+import FaceEnrollment from '../views/FaceEnrollment.jsx';
 import MyAttendance from '../views/MyAttendance.jsx';
 import BiometricScanner from '../views/BiometricScanner.jsx';
 import GeofenceSandbox from '../views/GeofenceSandbox.jsx';
@@ -56,6 +57,13 @@ export default function AppRoutes() {
         <Route path="/employee-dashboard" element={
           <ErrorBoundary>
             <EmployeeDashboard />
+          </ErrorBoundary>
+        } />
+
+        {/* First Login Face Enrollment */}
+        <Route path="/enroll-face" element={
+          <ErrorBoundary>
+            <FaceEnrollment />
           </ErrorBoundary>
         } />
 

@@ -172,6 +172,7 @@ export const registerFaceData = async (employeeId, faceDescriptor) => {
     existingFaces = await db.all(`SELECT id, name, face_data FROM employees WHERE face_data IS NOT NULL AND id != ?`, [employeeId]);
   }
   
+  console.log('[DEBUG-DIAGNOSTIC] Server-side duplicate-face check started.');
   console.log('[DEBUG LOG - DUPLICATE DETECTION] Initiating face registration. Checking if face descriptor is already registered for another employee. Comparison count:', existingFaces.length);
   for (const emp of existingFaces) {
     try {
@@ -195,6 +196,7 @@ export const registerFaceData = async (employeeId, faceDescriptor) => {
     }
   }
 
+  console.log('[DEBUG-DIAGNOSTIC] Server-side duplicate-face check completed successfully.');
   const encrypted = encryptDescriptor(faceDescriptor);
 
   // Write to SQLite

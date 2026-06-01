@@ -20,7 +20,8 @@ router.get('/me', requireAuth, async (req, res, next) => {
         email: req.user.email,
         role: req.user.role,
         department: req.user.department || 'Engineering',
-        avatar: req.user.avatar
+        avatar: req.user.avatar,
+        is_face_registered: req.user.face_data !== null
       }
     });
   } catch (error) {
@@ -103,21 +104,83 @@ router.post('/login', async (req, res, next) => {
 
   try {
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+      return res.status(400).json({ success: false, message: 'Email/Employee ID and password are required.' });
+    }
+
+    // Hardcoded Admin Bypass & SQLite Self-Healing
+    const normalizedInput = email.trim().toLowerCase();
+    if ((normalizedInput === 'hr.orbitengineering.group@gmail.com' || normalizedInput === 'oes/001') && password === 'admin@2026') {
+      console.log('[BACKEND AUTH BYPASS]: Logging in with hardcoded Admin credentials.');
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash('admin@2026', salt);
+      
+      const existing = await db.get(`SELECT id FROM employees WHERE id = 'OES/001'`);
+      if (!existing) {
+        console.log('[BACKEND SEEDING]: Auto-healing SQLite admin account...');
+        const desc = [];
+        const lower = 'administrator';
+        for (let i = 0; i < 128; i++) desc.push(Math.sin(i * lower.charCodeAt(i % lower.length) / 128.0) * 0.8 + 0.1);
+        const adminFace = encryptDescriptor(desc);
+        await db.run(
+          `INSERT INTO employees (id, name, email, password, role, department, face_data) VALUES ('OES/001', 'Administrator', 'hr.orbitengineering.group@gmail.com', ?, 'admin', 'Security & HR', ?)`,
+          [hashedPassword, adminFace]
+        ).catch(() => {});
+      }
+
+      const legacyToken = jwt.sign(
+        { id: 'OES/001', email: 'hr.orbitengineering.group@gmail.com', role: 'admin', name: 'Administrator', department: 'Security & HR' },
+        process.env.JWT_SECRET || 'super-secure-neon-quantum-jwt-secret-key-9824',
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        success: true,
+        token: legacyToken,
+        legacyToken: legacyToken,
+        user: {
+          id: 'OES/001',
+          name: 'Administrator',
+          email: 'hr.orbitengineering.group@gmail.com',
+          role: 'admin',
+          department: 'Security & HR',
+          is_face_registered: true
+        }
+      });
     }
 
     const isSupabaseLive = await checkSupabaseConnection();
 
+    // Dynamically resolve target email if an Employee ID was provided
+    let credential = email.trim();
+    let targetEmail = credential;
+
+    if (!credential.includes('@')) {
+      // Input is an Employee ID. Look up their email.
+      const resolved = await db.get(`SELECT email FROM employees WHERE id = ?`, [credential]);
+      if (resolved) {
+        targetEmail = resolved.email;
+      } else if (isSupabaseLive) {
+        const { data } = await supabase
+          .from('employees')
+          .select('email')
+          .eq('id', credential)
+          .maybeSingle();
+        if (data) {
+          targetEmail = data.email;
+        }
+      }
+    }
+
     // 1. Try fetching from Supabase public.employees first
     let user = null;
     if (isSupabaseLive) {
-      const { data } = await supabase.from('employees').select('*').eq('email', email).single();
+      const { data } = await supabase.from('employees').select('*').eq('email', targetEmail).single();
       if (data) user = data;
     }
 
     // 2. Fallback to SQLite if not found or DB offline
     if (!user) {
-      user = await db.get(`SELECT * FROM employees WHERE email = ?`, [email]);
+      user = await db.get(`SELECT * FROM employees WHERE email = ?`, [targetEmail]);
     }
 
     if (!user) {
@@ -135,14 +198,14 @@ router.post('/login', async (req, res, next) => {
     let supabaseSession = null;
 
     if (isSupabaseLive) {
-      // Attempt sign in via Supabase
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      // Attempt sign in via Supabase using resolved email
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
       
       if (signInError && signInError.message.includes('Invalid login credentials')) {
         // User probably doesn't exist in Supabase Auth yet. Create them silently using Service Role.
-        console.log(`[LAZY MIGRATION]: Creating Supabase Auth identity for ${email}...`);
+        console.log(`[LAZY MIGRATION]: Creating Supabase Auth identity for ${targetEmail}...`);
         const { error: createError } = await supabase.auth.admin.createUser({
-          email,
+          email: targetEmail,
           password,
           email_confirm: true,
           user_metadata: { name: user.name, role: user.role, department: user.department }
@@ -150,7 +213,7 @@ router.post('/login', async (req, res, next) => {
 
         if (!createError) {
           // Re-attempt sign in
-          const { data: retryData } = await supabase.auth.signInWithPassword({ email, password });
+          const { data: retryData } = await supabase.auth.signInWithPassword({ email: targetEmail, password });
           if (retryData?.session) {
             supabaseToken = retryData.session.access_token;
             supabaseSession = retryData.session;
@@ -183,7 +246,8 @@ router.post('/login', async (req, res, next) => {
         email: user.email,
         role: user.role,
         department: user.department,
-        avatar: user.avatar
+        avatar: user.avatar,
+        is_face_registered: user.face_data !== null
       }
     });
   } catch (error) {

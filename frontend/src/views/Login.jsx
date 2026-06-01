@@ -285,17 +285,17 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4.5 mt-5">
-          {/* Corporate Email Field */}
+          {/* Employee ID or Admin Email Field */}
           <div>
-            <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Corporate Email</label>
+            <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1.5">Employee ID / Admin Email</label>
             <div className="relative flex items-center">
               <span className="absolute left-3.5 text-slate-400 flex items-center pointer-events-none pr-3 border-r border-slate-100">
                 {/* <Mail className="h-4 w-4" /> */}
               </span>
               <input 
-                type="email" 
+                type="text" 
                 required 
-                placeholder="you@company.com" 
+                placeholder="e.g. OES/038 or admin@company.com" 
                 value={email} 
                 onChange={(e) => setEmail(e.target.value)} 
                 className="w-full pl-[52px] pr-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 placeholder-slate-350 transition-all outline-none text-slate-800" 
@@ -422,7 +422,7 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
 
         <button 
           type="button" 
-          // onClick={() => setShowDemoDrawer(!showDemoDrawer)} 
+          onClick={() => setShowDemoDrawer(!showDemoDrawer)} 
           className="flex items-center gap-2 rounded-xl bg-white border border-blue-100 hover:border-blue-200 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-[#005cff] shadow-md hover:shadow-lg transition-all cursor-pointer relative"
         >
           <HelpCircle className="w-4 h-4 text-[#005cff]" />

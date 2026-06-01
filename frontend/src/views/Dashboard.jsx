@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useSocket } from '../context/SocketContext.jsx';
 import { apiCall } from '../services/api.js';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, AlertOctagon, Clock, Activity, Database, Fingerprint, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Users, AlertOctagon, Clock, Activity, Database, Fingerprint, ShieldCheck, TrendingUp, Download, FileText } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const parseDetails = (details) => {
   if (!details) return null;
@@ -58,6 +59,109 @@ export default function Dashboard() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const mountedRef = React.useRef(true);
+
+  // Excel Exporter States & Helpers
+  const [exportMode, setExportMode] = useState('current');
+  const [selMonth, setSelMonth] = useState(new Date().getMonth() + 1);
+  const [selYear, setSelYear] = useState(new Date().getFullYear());
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportSuccess, setExportSuccess] = useState('');
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const handleExcelExport = async () => {
+    setExportError('');
+    setExportSuccess('');
+    setExporting(true);
+
+    try {
+      // Fetch unified attendance records (Admin only)
+      const res = await apiCall('/attendance', 'GET');
+      if (!res.success) {
+        throw new Error(res.message || 'Failed to fetch attendance ledger');
+      }
+
+      const records = res.logs || [];
+      if (records.length === 0) {
+        throw new Error('No attendance records found to export');
+      }
+
+      let filtered = [];
+      let filename = 'Attendance-All.xlsx';
+
+      if (exportMode === 'current') {
+        const today = new Date();
+        const currentMonth = today.getMonth() + 1;
+        const currentYear = today.getFullYear();
+        const monthName = monthNames[currentMonth - 1];
+        
+        filtered = records.filter(rec => {
+          if (!rec.date) return false;
+          const [year, month] = rec.date.split('-').map(Number);
+          return year === currentYear && month === currentMonth;
+        });
+        filename = `Attendance-${monthName}-${currentYear}.xlsx`;
+      } else if (exportMode === 'selected') {
+        const monthName = monthNames[selMonth - 1];
+        filtered = records.filter(rec => {
+          if (!rec.date) return false;
+          const [year, month] = rec.date.split('-').map(Number);
+          return year === selYear && month === selMonth;
+        });
+        filename = `Attendance-${monthName}-${selYear}.xlsx`;
+      } else {
+        filtered = records;
+      }
+
+      if (filtered.length === 0) {
+        throw new Error('No records matched the selected export month');
+      }
+
+      // Format records as JSON rows for SheetJS, mapping strictly to employee_id
+      const rows = filtered.map(log => ({
+        'Employee ID': log.employee_id || 'N/A',
+        'Employee Name': log.name || 'Unknown',
+        'Date': log.date || '',
+        'Check In': log.check_in || '--',
+        'Check Out': log.check_out || '--',
+        'Hours Worked': log.working_hours !== undefined ? log.working_hours : 0,
+        'Attendance Status': log.status || 'N/A'
+      }));
+
+      // Generate Workbook
+      const ws = XLSX.utils.json_to_sheet(rows);
+      
+      // Auto width formatting for premium visual elegance
+      const colWidths = [
+        { wch: 15 }, // Employee ID
+        { wch: 22 }, // Employee Name
+        { wch: 14 }, // Date
+        { wch: 12 }, // Check In
+        { wch: 12 }, // Check Out
+        { wch: 15 }, // Hours Worked
+        { wch: 18 }  // Attendance Status
+      ];
+      ws['!cols'] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Attendance Report");
+      
+      // Trigger download
+      XLSX.writeFile(wb, filename);
+
+      setExportSuccess(`Exported ${filtered.length} records to ${filename}!`);
+      setTimeout(() => setExportSuccess(''), 4000);
+    } catch (err) {
+      console.error('[EXCEL EXPORT ERROR]:', err);
+      setExportError(err.message || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     mountedRef.current = true;
@@ -230,6 +334,116 @@ export default function Dashboard() {
           );
         })}
       </motion.div>
+
+      {/* Admin Attendance Export Panel */}
+      {user?.role === 'admin' && (
+        <div className="glass-panel-heavy p-5 rounded-xl space-y-4 relative overflow-hidden">
+          <div className="spectrum-bar absolute left-0 right-0 top-0 h-1 bg-gradient-to-r from-violet-500 to-indigo-500" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg border border-violet-100 bg-violet-50 p-2 text-violet-700">
+                <FileText className="h-4 w-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">Attendance Excel Exporter</h3>
+                <p className="text-xs text-slate-500">Generate fully formatted spreadsheet reports</p>
+              </div>
+            </div>
+            {exportError && (
+              <span className="text-xs font-semibold text-red-600 bg-red-50 border border-red-100 px-3 py-1.5 rounded-xl font-sans">
+                {exportError}
+              </span>
+            )}
+            {exportSuccess && (
+              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl font-sans">
+                {exportSuccess}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end pt-2">
+            <div className="sm:col-span-2 space-y-1.5">
+              <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Export Filter Mode</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setExportMode('current')}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    exportMode === 'current'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Current Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportMode('selected')}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    exportMode === 'selected'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Custom Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setExportMode('all')}
+                  className={`flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
+                    exportMode === 'all'
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  All Records
+                </button>
+              </div>
+            </div>
+
+            {exportMode === 'selected' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Select Month</label>
+                <select
+                  value={selMonth}
+                  onChange={(e) => setSelMonth(Number(e.target.value))}
+                  className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none font-bold text-slate-700"
+                >
+                  {monthNames.map((name, idx) => (
+                    <option key={name} value={idx + 1}>{name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {exportMode === 'selected' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Select Year</label>
+                <select
+                  value={selYear}
+                  onChange={(e) => setSelYear(Number(e.target.value))}
+                  className="w-full py-2 px-3 bg-white border border-slate-200 rounded-xl text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none font-bold text-slate-700"
+                >
+                  {[2025, 2026, 2027, 2028].map(yr => (
+                    <option key={yr} value={yr}>{yr}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className={`sm:col-span-1 ${exportMode !== 'selected' ? 'sm:col-span-2' : ''}`}>
+              <button
+                type="button"
+                onClick={handleExcelExport}
+                disabled={exporting}
+                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-[0_4px_12px_rgba(79,70,229,0.2)] flex items-center justify-center gap-2 transition hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer border border-indigo-400/20"
+              >
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                {exporting ? 'Generating Report...' : 'Export Attendance'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="glass-panel-heavy relative overflow-hidden rounded-xl">
         <div className="spectrum-bar absolute left-0 right-0 top-0 h-1" />

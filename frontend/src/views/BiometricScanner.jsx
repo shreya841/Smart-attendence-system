@@ -415,6 +415,7 @@ export default function BiometricScanner() {
     scanInProgress.current = true; // Prevent concurrent scan submissions.
     
     console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Auto-scan triggered. Preparing biometric matching request...');
+    console.log('[DEBUG-DIAGNOSTIC] Attendance trigger started.');
     
     setScanResult({ status: 'analyzing', message: 'Extracting & matching face coordinates...' });
     setScannerStatusMsg('BIOMETRIC MATCH IN PROGRESS...');
@@ -439,6 +440,7 @@ export default function BiometricScanner() {
 
       const response = await Promise.race([scanPromise, timeoutPromise]);
       console.log('[DEBUG LOG - ATTENDANCE TRIGGER] Biometric scan match successful for:', response.employee?.name);
+      console.log('[DEBUG-DIAGNOSTIC] Attendance success for:', response.employee?.name);
 
       setScanResult({
         status: 'success',
@@ -451,6 +453,7 @@ export default function BiometricScanner() {
       executeScanCooldown(response, true);
     } catch (error) {
       console.error('[DEBUG LOG - ATTENDANCE TRIGGER] Biometric validation exception:', error);
+      console.log('[DEBUG-DIAGNOSTIC] Attendance failure:', error.message);
       const voiceAlert = error.voiceMessage || mapErrorToVoiceMessage(error);
       setScanResult({ status: 'error', message: error.message || 'Biometric validation failure.' });
       executeScanCooldown({
@@ -512,6 +515,10 @@ export default function BiometricScanner() {
         const rawDetection = await detectFaceBiometrics(video);
 
         if (rawDetection) {
+          console.log('[DEBUG-DIAGNOSTIC] Face detected in Scanner view.');
+          console.log('[DEBUG-DIAGNOSTIC] Scanner Face Confidence Score:', rawDetection.detection.score);
+          console.log('[DEBUG-DIAGNOSTIC] Scanner Face Descriptor Extracted successfully. Length:', rawDetection.descriptor?.length);
+
           const detection = faceapi.resizeResults(rawDetection, displaySize);
           setRealtimeScore(Math.round(detection.detection.score * 100));
 

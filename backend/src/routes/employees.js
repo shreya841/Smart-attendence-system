@@ -8,6 +8,14 @@ import { processGeofenceUpdate } from '../services/geofenceService.js';
 
 const router = express.Router();
 
+// Helper to reconstruct OES/XXX IDs that contain slashes
+const getFullEmpId = (req) => {
+  if (req.originalUrl.includes('/OES/')) {
+    return `OES/${req.params.id}`;
+  }
+  return req.params.id;
+};
+
 // Apply global Auth check
 router.use(requireAuth);
 
@@ -36,9 +44,9 @@ router.post('/reset-db', requireAdmin, async (req, res, next) => {
 
 // @route   POST /api/employees/:id/reset-face
 // @desc    Clear face data for a single employee (Admin only)
-router.post('/:id/reset-face', requireAdmin, async (req, res, next) => {
+router.post(['/:id/reset-face', '/OES/:id/reset-face'], requireAdmin, async (req, res, next) => {
   const db = getDb();
-  const empId = req.params.id;
+  const empId = getFullEmpId(req);
   try {
     const isSupabaseLive = await checkSupabaseConnection();
 
@@ -130,9 +138,14 @@ router.get('/me', async (req, res, next) => {
 
 // @route   GET /api/employees/:id
 // @desc    Retrieve details for a single employee
-router.get('/:id', async (req, res, next) => {
+router.get(['/:id', '/OES/:id'], async (req, res, next) => {
   const db = getDb();
+  const empId = getFullEmpId(req);
   try {
+    // Privacy check: standard employees can only view their own profile
+    if (req.user.role !== 'admin' && req.user.id !== empId) {
+      return res.status(403).json({ success: false, message: 'Access Denied: You can only view your own profile.' });
+    }
     const isSupabaseLive = await checkSupabaseConnection();
     let emp = null;
 
@@ -216,10 +229,10 @@ router.post('/', requireAdmin, async (req, res, next) => {
 
 // @route   PUT /api/employees/:id
 // @desc    Update employee profile (Admin only)
-router.put('/:id', requireAdmin, async (req, res, next) => {
+router.put(['/:id', '/OES/:id'], requireAdmin, async (req, res, next) => {
   const { name, email, role, department, password } = req.body;
   const db = getDb();
-  const empId = req.params.id;
+  const empId = getFullEmpId(req);
 
   try {
     const isSupabaseLive = await checkSupabaseConnection();
@@ -265,9 +278,9 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
 
 // @route   DELETE /api/employees/:id
 // @desc    Delete employee (Admin only)
-router.delete('/:id', requireAdmin, async (req, res, next) => {
+router.delete(['/:id', '/OES/:id'], requireAdmin, async (req, res, next) => {
   const db = getDb();
-  const empId = req.params.id;
+  const empId = getFullEmpId(req);
 
   try {
     const isSupabaseLive = await checkSupabaseConnection();
@@ -287,14 +300,22 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
 });
 
 // @route   POST /api/employees/:id/face
-// @desc    Register face biometrics for an employee (Admin only)
-router.post('/:id/face', requireAdmin, async (req, res, next) => {
+// @desc    Register face biometrics (employee can enroll own face; admin can enroll any)
+router.post(['/:id/face', '/OES/:id/face'], requireAuth, async (req, res, next) => {
   const { faceDescriptor } = req.body;
-  const empId = req.params.id;
+  const empId = getFullEmpId(req);
+
+  // Authorization: employee can only enroll their own face, admin can enroll anyone
+  const isSelf = req.user.id === empId;
+  const isAdmin = req.user.role === 'admin';
+  if (!isSelf && !isAdmin) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access Denied: You can only enroll your own face.'
+    });
+  }
 
   try {
-    // Note: registerFaceData inside faceRecognitionService.js is likely doing SQLite DB calls. 
-    // We'll need to refactor that service to do hybrid updates as well!
     const result = await registerFaceData(empId, faceDescriptor);
     res.json(result);
   } catch (error) {
@@ -304,9 +325,9 @@ router.post('/:id/face', requireAdmin, async (req, res, next) => {
 
 // @route   POST /api/employees/:id/coordinates
 // @desc    Update employee live location coordinates and recalculate geofence boundary calculations
-router.post('/:id/coordinates', async (req, res, next) => {
+router.post(['/:id/coordinates', '/OES/:id/coordinates'], async (req, res, next) => {
   const { latitude, longitude } = req.body;
-  const empId = req.params.id;
+  const empId = getFullEmpId(req);
 
   try {
     if (latitude === undefined || longitude === undefined) {
